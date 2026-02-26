@@ -3,12 +3,12 @@ chcp 65001 >nul
 setlocal
 
 ::==============================================================================
-:: Hardware Benchmark System - Start Script
+:: RoleFit Pro - Start Script
 ::==============================================================================
 
 echo.
 echo =============================================================
-echo   Hardware Benchmark System - Starting...
+echo   RoleFit Pro - Starting...
 echo =============================================================
 echo.
 
@@ -20,10 +20,10 @@ set SCRIPT_DIR=%~dp0
 ::==============================================================================
 echo [1/2] Starting backend service...
 echo Backend: http://localhost:8000
-echo API Docs: http://localhost:8000/docs
 echo.
 
-start "Backend - Hardware Benchmark" cmd /k "cd /d "%SCRIPT_DIR%backend" && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+cd /d "%SCRIPT_DIR%backend"
+start "Backend - RoleFit Pro" cmd /k "python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 
 :: Wait for backend
 echo Waiting for backend to start...
@@ -36,12 +36,8 @@ echo [2/2] Starting frontend service...
 echo Frontend: http://localhost:5173
 echo.
 
-start "Frontend - Hardware Benchmark" cmd /k "cd /d "%SCRIPT_DIR%frontend" && npm run dev"
-
-:: Wait for frontend
-echo.
-echo Waiting for frontend to start...
-timeout /t 8 /nobreak >nul
+cd /d "%SCRIPT_DIR%frontend"
+start "Frontend - RoleFit Pro" cmd /k "npm run dev"
 
 ::==============================================================================
 :: Done
@@ -63,7 +59,6 @@ echo.
 echo =============================================================
 
 :: Auto open browser
-echo Opening browser...
 start http://localhost:5173
 
 echo.
