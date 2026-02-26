@@ -1,9 +1,16 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pydantic import ConfigDict
 import os
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore"  # Allow extra fields in .env
+    )
+    
     # Application
     app_name: str = "HardwareBenchmark"
     debug: bool = True
@@ -13,13 +20,13 @@ class Settings(BaseSettings):
     database_url_sync: str = "postgresql://benchmark:benchmark@postgres:5432/benchmark_db"
     
     # Redis
-    redis_url: str = "redis://:benchmark@redis:6379/0"
+    redis_url: Optional[str] = None
     
     # InfluxDB
-    influxdb_url: str = "http://influxdb:8086"
-    influxdb_token: str = "benchmark-token"
-    influxdb_org: str = "benchmark"
-    influxdb_bucket: str = "metrics"
+    influxdb_url: Optional[str] = None
+    influxdb_token: Optional[str] = None
+    influxdb_org: Optional[str] = None
+    influxdb_bucket: Optional[str] = None
     
     # JWT
     secret_key: str = "your-secret-key-change-in-production"
@@ -39,11 +46,7 @@ class Settings(BaseSettings):
     benchmark_sample_interval: int = 1000
     
     # Software Storage
-    software_storage_path: str = "software"  # 软件存储目录
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    software_storage_path: str = "software"
 
 
 settings = Settings()
