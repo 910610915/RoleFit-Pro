@@ -35,7 +35,7 @@ $envContent | Out-File -FilePath ".env" -Encoding UTF8
 
 # Install deps
 Write-Host "Installing Python packages..."
-pip install fastapi uvicorn pydantic pydantic-settings sqlalchemy aiosqlite python-multipart passlib python-jose cryptography python-dotenv psutil
+pip install fastapi uvicorn pydantic pydantic-settings pydantic[email] sqlalchemy aiosqlite python-multipart passlib python-jose cryptography python-dotenv psutil email-validator
 
 # Init database
 Write-Host "Initializing database..."
