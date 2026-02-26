@@ -41,10 +41,11 @@ if (-not $nodeCmd) {
 Write-Host "  OK" -ForegroundColor Green
 
 # 4. Clone repo
-Write-Host "[4/10] Cloning repository..."
+Write-Host "[4/10] Getting code..."
 if (Test-Path $installDir) {
     Set-Location $installDir
-    git pull origin main 2>&1 | Out-Null
+    git fetch --all
+    git reset --hard origin/main 2>&1 | Out-Null
 } else {
     git clone https://github.com/910610915/RoleFit-Pro.git $installDir 2>&1 | Out-Null
 }
