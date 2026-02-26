@@ -79,19 +79,34 @@ foreach ($pkg in $packages) {
 
 Write-Host "  Backend OK" -ForegroundColor Green
 
+# 5.1 Create .env file
+Write-Host "[5b/10] Creating .env file..."
+$envContent = @"
+APP_NAME=RoleFitPro
+DEBUG=true
+DATABASE_URL=sqlite+aiosqlite:///./hardware_benchmark.db
+DATABASE_URL_SYNC=sqlite:///./hardware_benchmark.db
+SECRET_KEY=dev-secret-key-change-in-production-min-32-characters
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+CORS_ORIGINS=["*"]
+"@
+$envContent | Out-File -FilePath (Join-Path $installDir "backend\.env") -Encoding UTF8
+Write-Host "  OK" -ForegroundColor Green
+
 # 6. Init database
-Write-Host "[6/10] Initializing database..."
+Write-Host "[6/11] Initializing database..."
 python init_sqlite.py 2>&1 | Out-Null
 Write-Host "  OK" -ForegroundColor Green
 
 # 7. Install frontend dependencies
-Write-Host "[7/10] Installing frontend dependencies..."
+Write-Host "[7/11] Installing frontend dependencies..."
 Set-Location (Join-Path $installDir "frontend")
 npm install 2>&1 | Out-Null
 Write-Host "  OK" -ForegroundColor Green
 
 # 8. Create start script
-Write-Host "[8/10] Creating start script..."
+Write-Host "[8/11] Creating start script..."
 $startBat = @"
 @echo off
 cd /d "%~dp0backend"
@@ -108,7 +123,7 @@ $startBat | Out-File -FilePath (Join-Path $installDir "start.bat") -Encoding ASC
 Write-Host "  OK" -ForegroundColor Green
 
 # 9. Start backend
-Write-Host "[9/10] Starting backend..."
+Write-Host "[9/11] Starting backend..."
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$installDir\backend'; python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 Start-Sleep -Seconds 5
 Write-Host "  OK" -ForegroundColor Green
