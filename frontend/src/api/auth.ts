@@ -26,16 +26,16 @@ export interface RegisterRequest {
 
 export const authApi = {
   login: (data: LoginRequest) => 
-    api.post<LoginResponse>('/auth/auth/login', data),
+    api.post<LoginResponse>('/auth/login', data),
   
   register: (data: RegisterRequest) =>
-    api.post<LoginResponse>('/auth/auth/register', data),
+    api.post<LoginResponse>('/auth/register', data),
 
   me: () => 
-    api.get('/auth/auth/me'),
+    api.get('/auth/me'),
   
   logout: () => 
-    api.post('/auth/auth/logout')
+    api.post('/auth/logout')
 }
 
 // 导出login作为独立函数
