@@ -1,0 +1,13 @@
+# RoleFit Pro - Minimal Requirements (Python 3.14 compatible)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.4.0
+pydantic-settings>=2.0.0
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+python-multipart>=0.0.6
+passlib>=1.7.4
+python-jose>=3.3.0
+cryptography>=41.0.0
+python-dotenv>=1.0.0
+psutil>=5.9.0
