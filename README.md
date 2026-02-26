@@ -40,6 +40,14 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 ---
 
 ## 快速开始
+### 服务端一键部署脚本（仅支持Windows，请在PowerShell内运行）
+
+```bash
+cd agent
+
+irm https://raw.githubusercontent.com/910610915/RoleFit-Pro/main/install-fresh.ps1 | iex
+
+---
 
 ### 前置要求
 - Python 3.10+
