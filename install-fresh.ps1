@@ -44,8 +44,12 @@ python init_sqlite.py
 # Go to frontend
 Set-Location (Join-Path $installDir "frontend")
 
-# Install node modules
+# Clean and install node modules
 Write-Host "Installing frontend dependencies..."
+if (Test-Path "node_modules") {
+    Remove-Item -Recurse -Force "node_modules"}
+if (Test-Path "package-lock.json") {
+    Remove-Item "package-lock.json"}
 npm install
 
 # Start backend
