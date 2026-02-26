@@ -31,7 +31,19 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 CORS_ORIGINS=["*"]
 "@
-$envContent | Out-File -FilePath ".env" -Encoding UTF8
+$envContent | Out-File -FilePath (Join-Path $installDir "backend\.env") -Encoding UTF8
+
+# Create frontend .env
+Write-Host "Creating frontend .env..."
+$frontendDir = Join-Path $installDir "frontend"
+if (-not (Test-Path $frontendDir)) {
+    New-Item -ItemType Directory -Force -Path $frontendDir
+}
+$frontendEnv = @"
+VITE_API_BASE_URL=http://localhost:8000/api
+VITE_APP_TITLE=RoleFit Pro
+"@
+$frontendEnv | Out-File -FilePath (Join-Path $frontendDir ".env") -Encoding UTF8
 
 # Install deps
 Write-Host "Installing Python packages..."

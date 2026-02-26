@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from typing import Optional, List
 import os
@@ -28,11 +28,11 @@ def get_software_storage_dir():
 
 
 @router.get("", response_model=SoftwareListResponse)
-async def list_software(
+def list_software(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """获取测试软件列表"""
     query = select(TestSoftware).where(TestSoftware.is_active == True)
@@ -40,11 +40,11 @@ async def list_software(
     if category:
         query = query.where(TestSoftware.category == category)
     
-    count_result = await db.execute(select(func.count(TestSoftware.id)))
+    count_result = db.execute(select(func.count(TestSoftware.id)))
     total = count_result.scalar() or 0
     
     query = query.order_by(TestSoftware.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
+    result = db.execute(query)
     items = result.scalars().all()
     
     return SoftwareListResponse(
@@ -56,13 +56,13 @@ async def list_software(
 
 
 @router.post("", response_model=SoftwareResponse, status_code=status.HTTP_201_CREATED)
-async def create_software(
+def create_software(
     data: SoftwareCreate,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """创建测试软件"""
     # 检查 software_code 是否已存在
-    result = await db.execute(
+    result = db.execute(
         select(TestSoftware).where(TestSoftware.software_code == data.software_code)
     )
     existing = result.scalar_one_or_none()
@@ -71,18 +71,18 @@ async def create_software(
     
     software = TestSoftware(**data.model_dump())
     db.add(software)
-    await db.commit()
-    await db.refresh(software)
+    db.commit()
+    db.refresh(software)
     return software
 
 
 @router.get("/{software_id}", response_model=SoftwareResponse)
-async def get_software(
+def get_software(
     software_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """获取软件详情"""
-    result = await db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
+    result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
     software = result.scalar_one_or_none()
     if not software:
         raise HTTPException(status_code=404, detail="Software not found")
@@ -90,13 +90,13 @@ async def get_software(
 
 
 @router.put("/{software_id}", response_model=SoftwareResponse)
-async def update_software(
+def update_software(
     software_id: str,
     data: SoftwareUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """更新软件"""
-    result = await db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
+    result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
     software = result.scalar_one_or_none()
     if not software:
         raise HTTPException(status_code=404, detail="Software not found")
@@ -104,36 +104,36 @@ async def update_software(
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(software, key, value)
     
-    await db.commit()
-    await db.refresh(software)
+    db.commit()
+    db.refresh(software)
     return software
 
 
 @router.delete("/{software_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_software(
+def delete_software(
     software_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """删除软件(软删除)"""
-    result = await db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
+    result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
     software = result.scalar_one_or_none()
     if not software:
         raise HTTPException(status_code=404, detail="Software not found")
     
     software.is_active = False
-    await db.commit()
+    db.commit()
     return None
 
 
 # ====== 新增: 软件分发相关 API ======
 
 @router.get("/for-task/{software_id}", response_model=SoftwareForTask)
-async def get_software_for_task(
+def get_software_for_task(
     software_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """获取软件信息（用于任务下发到Agent）"""
-    result = await db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
+    result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
     software = result.scalar_one_or_none()
     if not software:
         raise HTTPException(status_code=404, detail="Software not found")
@@ -161,13 +161,13 @@ async def get_software_for_task(
 
 
 @router.get("/download/{software_code}")
-async def download_software(
+def download_software(
     software_code: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """下载软件包"""
     # 查询软件信息
-    result = await db.execute(
+    result = db.execute(
         select(TestSoftware).where(
             TestSoftware.software_code == software_code,
             TestSoftware.is_active == True
@@ -232,13 +232,13 @@ async def download_software(
 
 
 @router.get("/list-files/{software_code}")
-async def list_software_files(
+def list_software_files(
     software_code: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """列出软件目录中的文件（用于调试）"""
     # 查询软件信息
-    result = await db.execute(
+    result = db.execute(
         select(TestSoftware).where(
             TestSoftware.software_code == software_code,
             TestSoftware.is_active == True

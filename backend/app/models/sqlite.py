@@ -413,3 +413,20 @@ class Alarm(Base):
     is_resolved = Column(Boolean, default=False)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class FeatureCard(Base):
+    """功能卡片配置"""
+    __tablename__ = "feature_cards"
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    card_key = Column(String(50), unique=True, nullable=False, index=True)
+    title = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    icon = Column(String(50), nullable=True)
+    route = Column(String(100), nullable=True)
+    is_visible = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    is_custom = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

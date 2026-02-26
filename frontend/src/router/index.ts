@@ -96,6 +96,12 @@ const routes: RouteRecordRaw[] = [
     name: 'ExecutionList',
     component: () => import('@/views/Executions/ExecutionList.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/system',
+    name: 'system',
+    component: () => import('@/views/SystemManagement.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

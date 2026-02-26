@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy.orm import Session
+from sqlalchemy import select, or_, func
 from sqlalchemy.orm import selectinload
 from typing import Optional, List, Any
 from datetime import datetime, timedelta
@@ -34,13 +34,13 @@ def device_to_response(device: Device) -> dict:
 
 # Agent endpoints (no auth required)
 @router.post("/agent/register", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
-async def register_device(
+def register_device(
     register_data: AgentRegisterRequest,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Register a new device from agent"""
     # Check if device already exists
-    result = await db.execute(
+    result = db.execute(
         select(Device).where(Device.mac_address == register_data.mac_address)
     )
     existing_device = result.scalar_one_or_none()
@@ -61,8 +61,8 @@ async def register_device(
                 setattr(existing_device, key, value)
         existing_device.last_seen_at = datetime.utcnow()
         existing_device.status = "online"
-        await db.commit()
-        await db.refresh(existing_device)
+        db.commit()
+        db.refresh(existing_device)
         return device_to_response(existing_device)
     
     # Create new device with basic fields
@@ -82,19 +82,19 @@ async def register_device(
     
     db_device = Device(**device_data)
     db.add(db_device)
-    await db.commit()
-    await db.refresh(db_device)
+    db.commit()
+    db.refresh(db_device)
     
     return device_to_response(db_device)
 
 
 @router.post("/agent/heartbeat", status_code=status.HTTP_200_OK)
-async def device_heartbeat(
+def device_heartbeat(
     heartbeat_data: AgentHeartbeatRequest,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Device heartbeat endpoint"""
-    result = await db.execute(
+    result = db.execute(
         select(Device).where(Device.mac_address == heartbeat_data.mac_address)
     )
     device = result.scalar_one_or_none()
@@ -133,21 +133,21 @@ async def device_heartbeat(
         if "disk_type" in sys_info:
             device.disk_type = sys_info.get("disk_type")
     
-    await db.commit()
+    db.commit()
     
     return {"status": "ok"}
 
 
 # User endpoints (auth required)
 @router.get("", response_model=DeviceListResponse)
-async def list_devices(
+def list_devices(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
     department: Optional[str] = None,
     position: Optional[str] = None,
     keyword: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Get device list"""
     query = select(Device)
@@ -170,12 +170,12 @@ async def list_devices(
     # Count total
     from sqlalchemy import func
     count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
+    total = db.scalar(count_query) or 0
     
     # Apply pagination
     query = query.offset((page - 1) * page_size).limit(page_size)
     
-    result = await db.execute(query)
+    result = db.execute(query)
     devices = result.scalars().all()
     
     return DeviceListResponse(
@@ -187,12 +187,12 @@ async def list_devices(
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)
-async def get_device(
+def get_device(
     device_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Get device details"""
-    result = await db.execute(
+    result = db.execute(
         select(Device).where(Device.id == device_id)
     )
     device = result.scalar_one_or_none()
@@ -207,13 +207,13 @@ async def get_device(
 
 
 @router.put("/{device_id}", response_model=DeviceResponse)
-async def update_device(
+def update_device(
     device_id: str,
     device_data: DeviceUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Update device information"""
-    result = await db.execute(
+    result = db.execute(
         select(Device).where(Device.id == device_id)
     )
     device = result.scalar_one_or_none()
@@ -228,19 +228,19 @@ async def update_device(
     for key, value in device_data.model_dump(exclude_unset=True).items():
         setattr(device, key, value)
     
-    await db.commit()
-    await db.refresh(device)
+    db.commit()
+    db.refresh(device)
     
     return device
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_device(
+def delete_device(
     device_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Delete device"""
-    result = await db.execute(
+    result = db.execute(
         select(Device).where(Device.id == device_id)
     )
     device = result.scalar_one_or_none()
@@ -251,5 +251,5 @@ async def delete_device(
             detail="Device not found"
         )
     
-    await db.delete(device)
-    await db.commit()
+    db.delete(device)
+    db.commit()

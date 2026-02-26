@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import async_engine, Base
+from app.core.database import sync_engine, Base
+
+# Import models to register them with Base.metadata
+from app.models.sqlite import FeatureCard
 
 # Import API routers
 from app.api import (
@@ -16,7 +19,9 @@ from app.api import (
     scripts as scripts_router,
     executions as executions_router,
     agent as agent_router,
-    alarms as alarms_router
+    alarms as alarms_router,
+    feature_cards as feature_cards_router,
+    database as database_router
 )
 from app.api import websocket as websocket_router
 
@@ -50,6 +55,8 @@ app.include_router(scripts_router.router, prefix="/api", tags=["Scripts"])
 app.include_router(executions_router.router, prefix="/api", tags=["Executions"])
 app.include_router(agent_router.router, prefix="/api/agent", tags=["Agent"])
 app.include_router(alarms_router.router, prefix="/api", tags=["Alarms"])
+app.include_router(feature_cards_router.router, prefix="/api", tags=["Feature Cards"])
+app.include_router(database_router.router, prefix="/api", tags=["Database"])
 app.include_router(websocket_router.router, tags=["WebSocket"])
 
 
@@ -57,14 +64,14 @@ app.include_router(websocket_router.router, tags=["WebSocket"])
 async def startup_event():
     """Initialize application on startup"""
     # Create database tables
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    with sync_engine.begin() as conn:
+        Base.metadata.create_all(conn)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    await async_engine.dispose()
+    sync_engine.dispose()
 
 
 @app.get("/")

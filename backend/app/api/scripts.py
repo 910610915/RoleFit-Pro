@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from typing import Optional
 import json
@@ -27,12 +27,12 @@ def script_to_response(script: JobScript) -> dict:
 
 
 @router.get("", response_model=ScriptListResponse)
-async def list_scripts(
+def list_scripts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     position_id: Optional[str] = None,
     software_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """获取岗位测试脚本列表"""
     query = select(JobScript).where(JobScript.is_active == True)
@@ -45,11 +45,11 @@ async def list_scripts(
     if software_id:
         query = query.where(JobScript.software_id == software_id)
     
-    count_result = await db.execute(select(func.count(JobScript.id)))
+    count_result = db.execute(select(func.count(JobScript.id)))
     total = count_result.scalar() or 0
     
     query = query.order_by(JobScript.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
+    result = db.execute(query)
     items = result.scalars().all()
     
     return ScriptListResponse(
@@ -61,9 +61,9 @@ async def list_scripts(
 
 
 @router.post("", response_model=ScriptResponse, status_code=status.HTTP_201_CREATED)
-async def create_script(
+def create_script(
     data: ScriptCreate,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """创建岗位测试脚本"""
     # 转换position_ids为JSON字符串
@@ -78,19 +78,19 @@ async def create_script(
     
     script = JobScript(**script_data)
     db.add(script)
-    await db.commit()
-    await db.refresh(script)
+    db.commit()
+    db.refresh(script)
     # 使用 script_to_response 转换响应格式
     return ScriptResponse.model_validate(script_to_response(script))
 
 
 @router.get("/{script_id}", response_model=ScriptResponse)
-async def get_script(
+def get_script(
     script_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """获取脚本详情"""
-    result = await db.execute(select(JobScript).where(JobScript.id == script_id))
+    result = db.execute(select(JobScript).where(JobScript.id == script_id))
     script = result.scalar_one_or_none()
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
@@ -98,13 +98,13 @@ async def get_script(
 
 
 @router.put("/{script_id}", response_model=ScriptResponse)
-async def update_script(
+def update_script(
     script_id: str,
     data: ScriptUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """更新脚本"""
-    result = await db.execute(select(JobScript).where(JobScript.id == script_id))
+    result = db.execute(select(JobScript).where(JobScript.id == script_id))
     script = result.scalar_one_or_none()
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
@@ -121,23 +121,23 @@ async def update_script(
     for key, value in update_data.items():
         setattr(script, key, value)
     
-    await db.commit()
-    await db.refresh(script)
+    db.commit()
+    db.refresh(script)
     # 使用 script_to_response 转换响应格式
     return ScriptResponse.model_validate(script_to_response(script))
 
 
 @router.delete("/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_script(
+def delete_script(
     script_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """删除脚本(软删除)"""
-    result = await db.execute(select(JobScript).where(JobScript.id == script_id))
+    result = db.execute(select(JobScript).where(JobScript.id == script_id))
     script = result.scalar_one_or_none()
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
     
     script.is_active = False
-    await db.commit()
+    db.commit()
     return None

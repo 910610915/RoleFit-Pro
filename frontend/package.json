@@ -15,12 +15,14 @@
     "lodash-es": "^4.17.21",
     "naive-ui": "^2.38.0",
     "pinia": "^2.1.7",
+    "three": "^0.162.0",
     "vue": "^3.4.0",
     "vue-echarts": "^6.6.1",
     "vue-i18n": "^9.13.0",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@types/three": "^0.162.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "sass": "^1.77.0",
     "typescript": "~5.4.0",

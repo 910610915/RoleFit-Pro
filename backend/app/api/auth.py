@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
-from datetime import timedelta
 
-from app.core.database import get_db
+from app.core.database import get_db_sync
 from app.core.security import (
     hash_password, verify_password, 
     create_access_token, create_refresh_token, 
-    decode_token
+    decode_token, security
 )
 from app.core.config import settings
 from app.models.sqlite import User
@@ -16,14 +15,14 @@ from app.schemas.user import (
     LoginRequest, TokenResponse, TokenRefreshRequest
 )
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(tags=["Authentication"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(user_data: UserCreate, db = Depends(get_db_sync)):
     """Register a new user"""
     # Check if username exists
-    result = await db.execute(select(User).where(User.username == user_data.username))
+    result = db.execute(select(User).where(User.username == user_data.username))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -32,7 +31,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     
     # Check if email exists
     if user_data.email:
-        result = await db.execute(select(User).where(User.email == user_data.email))
+        result = db.execute(select(User).where(User.email == user_data.email))
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -48,17 +47,17 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
         role="user"
     )
     db.add(db_user)
-    await db.commit()
-    await db.refresh(db_user)
+    db.commit()
+    db.refresh(db_user)
     
     return db_user
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(login_data: LoginRequest, db = Depends(get_db_sync)):
     """User login"""
     # Find user
-    result = await db.execute(select(User).where(User.username == login_data.username))
+    result = db.execute(select(User).where(User.username == login_data.username))
     user = result.scalar_one_or_none()
     
     if not user or not verify_password(login_data.password, user.password_hash):
@@ -92,48 +91,66 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(refresh_data: TokenRefreshRequest, db: AsyncSession = Depends(get_db)):
+async def refresh_token(token_data: TokenRefreshRequest, db = Depends(get_db_sync)):
     """Refresh access token"""
-    payload = decode_token(refresh_data.refresh_token)
-    
-    if payload.get("type") != "refresh":
+    try:
+        payload = decode_token(token_data.refresh_token)
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+        
+        result = db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+        
+        access_token = create_access_token(
+            data={"sub": str(user.id), "username": user.username, "role": user.role}
+        )
+        new_refresh_token = create_refresh_token(
+            data={"sub": str(user.id)}
+        )
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            expires_in=settings.access_token_expire_minutes * 60,
+            token_type="Bearer",
+            user=UserResponse.model_validate(user)
+        )
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type"
+            detail="Invalid refresh token"
         )
-    
-    # Get user
-    user_id = payload.get("sub")
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or disabled"
-        )
-    
-    # Create new tokens
-    access_token = create_access_token(
-        data={"sub": str(user.id), "username": user.username, "role": user.role}
-    )
-    new_refresh_token = create_refresh_token(
-        data={"sub": str(user.id)}
-    )
-    
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=new_refresh_token,
-        expires_in=settings.access_token_expire_minutes * 60,
-        token_type="Bearer",
-        user=UserResponse.model_validate(user)
-    )
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(db: AsyncSession = Depends(get_db), current_user: dict = Depends(lambda: {"sub": "demo"})):
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db = Depends(get_db_sync)
+):
     """Get current user info"""
-    result = await db.execute(select(User).where(User.id == current_user.get("sub")))
+    # Decode token
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    
+    # Get user from database
+    result = db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     
     if not user:
@@ -142,4 +159,10 @@ async def get_current_user_info(db: AsyncSession = Depends(get_db), current_user
             detail="User not found"
         )
     
-    return user
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled"
+        )
+    
+    return UserResponse.model_validate(user)

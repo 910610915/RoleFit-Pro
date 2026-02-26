@@ -49,6 +49,11 @@ irm https://raw.githubusercontent.com/910610915/RoleFit-Pro/main/install-fresh.p
 
 ---
 
+### 一键部署（仅支持Windows，请在PowerShell内运行）
+```
+irm https://raw.githubusercontent.com/910610915/RoleFit-Pro/main/install-fresh.ps1 | iex
+```
+
 ### 前置要求
 - Python 3.10+
 - Node.js 18+

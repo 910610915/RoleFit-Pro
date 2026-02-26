@@ -1,36 +1,19 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
 
-# 使用SQLite的Base
-from app.models.sqlite import Base as SQLiteBase
+# Use sync SQLite directly - hardcode for reliability
+database_url = "sqlite:///./hardware_benchmark.db"
 
-# Async engine for FastAPI
-async_engine = create_async_engine(
-    settings.database_url,
-    echo=settings.debug,
-    pool_pre_ping=True,
-)
-
-# Async session factory
-AsyncSessionLocal = async_sessionmaker(
-    async_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
-
-# Sync engine for Alembic migrations
+# Sync engine 
 sync_engine = create_engine(
-    settings.database_url_sync,
+    database_url,
     echo=settings.debug,
-    pool_pre_ping=True,
+    connect_args={"check_same_thread": False}
 )
 
-# Sync session factory for scripts
+# Sync session factory
 SyncSessionLocal = sessionmaker(
     bind=sync_engine,
     autocommit=False,
@@ -41,15 +24,6 @@ SyncSessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-async def get_db() -> AsyncSession:
-    """Dependency for getting async database session"""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
-
-
 def get_db_sync():
     """Dependency for getting sync database session"""
     with SyncSessionLocal() as session:
@@ -57,3 +31,7 @@ def get_db_sync():
             yield session
         finally:
             session.close()
+
+
+# Keep for compatibility
+get_db = get_db_sync
