@@ -40,7 +40,7 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 
 ```bash
 irm https://raw.githubusercontent.com/910610915/RoleFit-Pro/main/install-fresh.ps1 | iex
-
+---
 
 ### 前置要求
 - Python 3.10+
