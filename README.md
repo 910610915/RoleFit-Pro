@@ -40,7 +40,6 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 
 ```bash
 irm https://raw.githubusercontent.com/910610915/RoleFit-Pro/main/install-fresh.ps1 | iex
----
 
 ### 一键部署（仅支持Windows，请在PowerShell内运行）
 ```
