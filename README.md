@@ -2,10 +2,6 @@
 
 Intelligent Hardware Performance Benchmark and Position Matching Platform
 
----
-##一键安装部署命令（Windows用户在powershell内运行）
-
-
 ## 简介
 
 **RoleFit Pro** 是一款面向游戏开发公司的智能硬件性能基准测试与岗位匹配平台。
@@ -43,10 +39,7 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 ### 服务端一键部署脚本（仅支持Windows，请在PowerShell内运行）
 
 ```bash
-cd agent
-
 irm https://raw.githubusercontent.com/910610915/RoleFit-Pro/main/install-fresh.ps1 | iex
-
 ---
 
 ### 一键部署（仅支持Windows，请在PowerShell内运行）
