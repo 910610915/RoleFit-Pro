@@ -73,6 +73,23 @@
       </div>
     </section>
 
+    <!-- Customizable Widget Board -->
+    <section class="widget-board" v-if="userRole === 'admin' || userRole === 'manager'">
+      <div class="widget-header">
+        <h3>自定义看板</h3>
+        <n-button size="small" @click="showWidgetConfig = true">
+          <template #icon><n-icon><SettingsOutline /></n-icon></template>
+          配置
+        </n-button>
+      </div>
+      <div class="widget-grid">
+        <div v-for="widget in activeWidgets" :key="widget.id" class="widget-card">
+          <h4>{{ widget.title }}</h4>
+          <component :is="widget.component" :data="widget.data" :vram-data="widget.vramData" />
+        </div>
+      </div>
+    </section>
+
     <!-- Bottom Row -->
     <section class="bottom-section">
       <!-- Benchmarks -->
@@ -153,6 +170,13 @@
       </div>
     </section>
 
+    <!-- Widget Config Modal -->
+    <WidgetConfigModal
+      v-model:show="showWidgetConfig"
+      :active="activeWidgets.map(w => w.id)"
+      @save="updateWidgets"
+    />
+
     <!-- Benchmark Modal -->
     <n-modal v-model:show="showBenchmarkModal" preset="card" title="新建基准测试" style="width: 500px;">
       <n-form ref="benchmarkFormRef" :model="benchmarkForm" :rules="benchmarkRules">
@@ -165,6 +189,21 @@
         <n-form-item label="测试场景" path="test_scene">
           <n-input v-model:value="benchmarkForm.test_scene" placeholder="可选：场景名称或项目路径" />
         </n-form-item>
+        
+        <!-- Granular Control -->
+        <n-divider title-placement="left">精细化控制</n-divider>
+        <n-form-item label="启用闲置检测 (前置检查)" path="pre_flight_check">
+          <n-switch v-model:value="benchmarkForm.pre_flight_check" />
+          <span style="margin-left: 8px; font-size: 12px; color: #666;">仅在鼠标键盘无操作5分钟后启动</span>
+        </n-form-item>
+        <div style="display: flex; gap: 16px;">
+          <n-form-item label="CPU 资源限制 (%)" path="resource_limit_cpu" style="flex: 1">
+            <n-input-number v-model:value="benchmarkForm.resource_limit_cpu" :min="10" :max="100" />
+          </n-form-item>
+          <n-form-item label="内存 资源限制 (%)" path="resource_limit_mem" style="flex: 1">
+            <n-input-number v-model:value="benchmarkForm.resource_limit_mem" :min="10" :max="100" />
+          </n-form-item>
+        </div>
       </n-form>
       <template #footer>
         <n-button @click="showBenchmarkModal = false">取消</n-button>
@@ -179,13 +218,19 @@ import { ref, reactive, onMounted, onUnmounted, h } from 'vue'
 import { 
   NButton, NSelect, NIcon, NProgress, NRadioGroup, NRadioButton,
   NDataTable, NAlert, NSpin, NEmpty, NModal, NForm, NFormItem,
-  NInput, NBadge
+  NInput, NBadge, NSwitch, NInputNumber, NDivider, useMessage
 } from 'naive-ui'
 import * as echarts from 'echarts'
 import { 
   HardwareChip, Desktop, Speedometer, Server, 
-  Refresh, Add, Bulb, Warning as WarningIcon, AlertCircle as AlertIcon
+  Refresh, Add, Bulb, Warning as WarningIcon, AlertCircle as AlertIcon,
+  SettingsOutline
 } from '@vicons/ionicons5'
+
+import CpuWidget from '../../components/widgets/CpuWidget.vue'
+import GpuWidget from '../../components/widgets/GpuWidget.vue'
+import AlertsWidget from '../../components/widgets/AlertsWidget.vue'
+import WidgetConfigModal from '../../components/WidgetConfigModal.vue'
 
 // Map icons to metric keys
 const iconMap: Record<string, any> = {
@@ -204,15 +249,84 @@ const cpuChartRef = ref<HTMLElement | null>(null)
 const gpuChartRef = ref<HTMLElement | null>(null)
 let cpuChart: echarts.ECharts | null = null
 let gpuChart: echarts.ECharts | null = null
+const gpuVramHistory = ref<number[]>([])
 
 const benchmarks = ref<any[]>([])
 const benchmarkLoading = ref(false)
 const showBenchmarkModal = ref(false)
+const showWidgetConfig = ref(false)
+const userRole = ref('admin') // Should fetch from user store
+const message = useMessage()
+const activeWidgets = ref<any[]>([])
+const widgetMap: Record<string, any> = {
+  cpu: { component: CpuWidget, title: 'CPU 趋势图' },
+  gpu: { component: GpuWidget, title: 'GPU 趋势图' },
+  alerts: { component: AlertsWidget, title: '活跃告警' }
+}
+
+const updateWidgets = (keys: string[]) => {
+  activeWidgets.value = keys.map(key => {
+    const config = widgetMap[key]
+    if (!config) return null
+    
+    let data = null
+    if (key === 'cpu') {
+      data = (cpuChart?.getOption() as any)?.series?.[0]?.data || []
+    } else if (key === 'gpu') {
+      data = (gpuChart?.getOption() as any)?.series?.[0]?.data || []
+    } else if (key === 'alerts') {
+      data = alerts.value
+    }
+    
+    return {
+      id: key,
+      component: config.component,
+      title: config.title,
+      data: data,
+      vramData: key === 'gpu' ? gpuVramHistory.value : undefined
+    }
+  }).filter(Boolean)
+  
+  // Save to local storage
+  localStorage.setItem('rolefit_dashboard_widgets', JSON.stringify(keys))
+}
+
+const loadSavedWidgets = () => {
+  try {
+    const saved = localStorage.getItem('rolefit_dashboard_widgets')
+    if (saved) {
+      updateWidgets(JSON.parse(saved))
+    } else {
+      // Default widgets
+      updateWidgets(['cpu', 'alerts'])
+    }
+  } catch (e) {
+    console.error('Failed to load widgets:', e)
+  }
+}
+
+// Watch data changes to update widget data
+const refreshWidgetData = () => {
+  activeWidgets.value.forEach(widget => {
+    if (widget.id === 'cpu') {
+      widget.data = (cpuChart?.getOption() as any)?.series?.[0]?.data || []
+    } else if (widget.id === 'gpu') {
+      widget.data = (gpuChart?.getOption() as any)?.series?.[0]?.data || []
+      widget.vramData = gpuVramHistory.value
+    } else if (widget.id === 'alerts') {
+      widget.data = alerts.value
+    }
+  })
+}
+
 const startingBenchmark = ref(false)
 const benchmarkForm = reactive({
   software_code: null,
   benchmark_type: null,
-  test_scene: ''
+  test_scene: '',
+  pre_flight_check: true,
+  resource_limit_cpu: 80,
+  resource_limit_mem: 80
 })
 const benchmarkRules = {
   software_code: { required: true, message: '请选择测试软件' },
@@ -265,16 +379,25 @@ const benchmarkColumns = [
 // Methods
 const loadDevices = async () => {
   try {
+    console.log('Loading devices...')
     const res = await fetch('/api/devices')
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`)
+    }
     const data = await res.json()
-    if (data.items) {
+    console.log('Devices loaded:', data)
+    
+    if (data.items && data.items.length > 0) {
       deviceOptions.value = data.items.map((d: any) => ({
         label: d.device_name,
         value: d.id
       }))
-      if (deviceOptions.value.length > 0 && !selectedDevice.value) {
+      if (!selectedDevice.value) {
         selectedDevice.value = deviceOptions.value[0].value
       }
+    } else {
+      console.warn('No devices found')
+      message.warning('暂无可用设备，请先部署并启动Agent')
     }
   } catch (e) {
     console.error('Failed to load devices:', e)
@@ -365,6 +488,7 @@ const refreshCharts = async () => {
       const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
       const cpuData = data.metrics.map((m: any) => m.cpu_percent || 0)
       const gpuData = data.metrics.map((m: any) => m.gpu_percent || 0)
+      gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_vram_used || 0) / 1024) // Convert MB to GB
       
       cpuChart.setOption({
         xAxis: { data: timestamps },
@@ -433,6 +557,7 @@ const refreshData = () => {
   loadBenchmarks()
   loadAlerts()
   refreshCharts()
+  refreshWidgetData()
 }
 
 const runAIAnalysis = async () => {
@@ -464,7 +589,10 @@ const startBenchmark = async () => {
         device_id: selectedDevice.value,
         software_code: benchmarkForm.software_code,
         benchmark_type: benchmarkForm.benchmark_type,
-        test_scene: benchmarkForm.test_scene
+        test_scene: benchmarkForm.test_scene,
+        pre_flight_check: benchmarkForm.pre_flight_check,
+        resource_limit_cpu: benchmarkForm.resource_limit_cpu,
+        resource_limit_mem: benchmarkForm.resource_limit_mem
       })
     })
     showBenchmarkModal.value = false
@@ -490,6 +618,7 @@ onMounted(async () => {
     await onDeviceChange()
     refreshInterval = window.setInterval(refreshData, 10000)
   }
+  loadSavedWidgets()
 })
 
 onUnmounted(() => {
@@ -535,6 +664,33 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+/* Fix text visibility on white background */
+.header-right :deep(.n-base-selection-label),
+.header-right :deep(.n-base-selection-placeholder),
+.header-right :deep(.n-base-selection-input) {
+  color: #333 !important; 
+  --n-text-color: #333 !important;
+  --n-placeholder-color: #999 !important;
+}
+
+.header-right :deep(.n-base-selection) {
+  --n-border: 1px solid #e2e8f0 !important;
+  background-color: #fff !important;
+}
+
+/* Fix button text visibility */
+.header-right :deep(.n-button:not(.n-button--primary)) {
+  color: #333 !important;
+  --n-text-color: #333 !important;
+  background-color: #f1f5f9 !important;
+}
+
+/* Fix modal and form text visibility */
+:deep(.n-modal), :deep(.n-card), :deep(.n-form-item-label) {
+  color: #333 !important;
+  --n-text-color: #333 !important;
 }
 
 .metrics-section {
@@ -622,6 +778,43 @@ onUnmounted(() => {
   font-weight: 600;
   color: #1e293b;
   margin: 0;
+}
+
+.widget-board {
+  margin-bottom: 24px;
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.widget-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.widget-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.widget-card h4 {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 12px 0;
 }
 
 .bottom-section {

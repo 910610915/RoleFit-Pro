@@ -23,7 +23,7 @@
                     {{ feature }}
                   </n-tag>
                 </n-space>
-                <n-button size="small" type="primary" style="margin-top: 12px" @click="openUrl(software.website)">
+                <n-button size="small" type="primary" style="margin-top: 12px; color: #000;" @click="openUrl(software.website)">
                   访问官网
                 </n-button>
               </div>
@@ -50,7 +50,7 @@
                     {{ feature }}
                   </n-tag>
                 </n-space>
-                <n-button size="small" type="primary" style="margin-top: 12px" @click="openUrl(software.website)">
+                <n-button size="small" type="primary" style="margin-top: 12px; color: #000;" @click="openUrl(software.website)">
                   访问官网
                 </n-button>
               </div>
@@ -77,7 +77,7 @@
                     {{ feature }}
                   </n-tag>
                 </n-space>
-                <n-button size="small" type="primary" style="margin-top: 12px" @click="openUrl(software.website)">
+                <n-button size="small" type="primary" style="margin-top: 12px; color: #000;" @click="openUrl(software.website)">
                   访问官网
                 </n-button>
               </div>
@@ -104,7 +104,7 @@
                     {{ feature }}
                   </n-tag>
                 </n-space>
-                <n-button size="small" type="primary" style="margin-top: 12px" @click="openUrl(software.website)">
+                <n-button size="small" type="primary" style="margin-top: 12px; color: #000;" @click="openUrl(software.website)">
                   访问官网
                 </n-button>
               </div>

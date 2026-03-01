@@ -176,6 +176,7 @@ onMounted(() => {
   border-radius: 10px;
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  color: #000;
 }
 
 .add-btn:hover {

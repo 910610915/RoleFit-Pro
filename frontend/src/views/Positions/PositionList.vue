@@ -304,6 +304,7 @@ onMounted(() => {
   border-radius: 10px;
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  color: #000;
 }
 
 .add-btn:hover {
@@ -343,6 +344,7 @@ onMounted(() => {
   border: none;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  color: #000;
 }
 
 /* Table Card */
@@ -388,5 +390,6 @@ onMounted(() => {
   background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   border: none;
   border-radius: 8px;
+  color: #000;
 }
 </style>

@@ -13,8 +13,8 @@
           :options="deviceOptions"
           :max-tag-count="5"
         />
-        <n-button type="primary" @click="loadComparison" :loading="loading" :disabled="selectedDevices.length < 2">
-          <template #icon><n-icon><bar-chart /></n-icon></template>
+        <n-button type="primary" @click="loadComparison" :loading="loading" :disabled="selectedDevices.length < 2" style="color: #000">
+          <template #icon><n-icon color="#000"><bar-chart /></n-icon></template>
           开始对比
         </n-button>
       </n-space>

@@ -10,7 +10,7 @@
       <n-tab-pane name="cards" tab="功能卡片管理">
         <n-card>
           <div class="toolbar">
-            <n-button type="primary" @click="showAddModal = true">
+            <n-button type="primary" @click="showAddModal = true" style="color: #000">
               新增卡片
             </n-button>
           </div>
@@ -248,7 +248,7 @@
                   @keydown.enter.exact.prevent="sendChatMessage"
                 />
                 <n-space style="margin-top: 8px;">
-                  <n-button type="primary" @click="sendChatMessage" :loading="sendingMessage" :disabled="!chatInput">
+                  <n-button type="primary" @click="sendChatMessage" :loading="sendingMessage" :disabled="!chatInput" style="color: #000">
                     发送
                   </n-button>
                   <n-button @click="clearChat" :disabled="chatMessages.length === 0">

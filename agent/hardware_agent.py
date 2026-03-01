@@ -309,7 +309,7 @@ class HardwareBenchmarkAgent:
     # GitHub update configuration
     GITHUB_OWNER = "910610915" # 请根据实际情况修改
     GITHUB_REPO = "RoleFit-Pro" # 请根据实际情况修改
-    CURRENT_VERSION = "1.0.1"  # 当前版本号
+    CURRENT_VERSION = "1.0.2"  # 当前版本号
     
     def __init__(self, server_url: str, api_key: Optional[str] = None):
         self.server_url = server_url.rstrip('/')
@@ -750,6 +750,67 @@ class HardwareBenchmarkAgent:
         except Exception as e:
             logger.error(f"Update check error: {e}")
 
+    def send_metrics(self) -> bool:
+        """Send real-time performance metrics to server"""
+        try:
+            url = f"{self.server_url}/api/performance/metrics"
+            
+            # Get current system metrics
+            sys_metrics = self.monitor.get_current_metrics()
+            
+            # Map SystemMonitor metrics to PerformanceMetricCreate schema
+            # SystemMonitor returns: cpu_usage_percent, ram_usage_percent, ram_used_gb, disk_usage_percent, process_count
+            # PerformanceMetricCreate expects: cpu_percent, memory_percent, memory_used_mb, disk_io_percent, etc.
+            
+            data = {
+                "device_id": self.device_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "cpu_percent": sys_metrics.get("cpu_usage_percent"),
+                "memory_percent": sys_metrics.get("ram_usage_percent"),
+                "memory_used_mb": sys_metrics.get("ram_used_gb", 0) * 1024, # Convert GB to MB
+                # "disk_io_percent": sys_metrics.get("disk_usage_percent"), # Map disk usage to io_percent for now or just ignore? 
+                # Actually disk_usage_percent is space usage, not performance metric. 
+                # Let's add disk_io_percent to SystemMonitor or just leave it None for now.
+                "process_count": sys_metrics.get("process_count")
+            }
+            
+            # Add GPU metrics if available (reuse logic from collector or monitor)
+            # SystemMonitor currently doesn't have GPU.
+            # We can try to get simple GPU usage if nvidia-smi is available
+            try:
+                # Simple NVIDIA GPU check
+                result = subprocess.run(
+                    ['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'],
+                    capture_output=True, text=True, timeout=2
+                )
+                if result.returncode == 0:
+                    output = result.stdout.strip()
+                    if output:
+                        # "50, 4096, 8192"
+                        parts = output.split(', ')
+                        if len(parts) >= 3:
+                            data["gpu_percent"] = float(parts[0])
+                            data["gpu_memory_used_mb"] = float(parts[1])
+                            data["gpu_memory_total_mb"] = float(parts[2])
+            except:
+                pass
+
+            headers = {}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+            
+            response = requests.post(url, json=data, headers=headers, timeout=10)
+            
+            if response.status_code == 201:
+                return True
+            else:
+                logger.warning(f"Metrics push failed: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Metrics push error: {e}")
+            return False
+
     def run(self):
         """Main agent loop"""
         logger.info(f"Starting Hardware Benchmark Agent v{self.CURRENT_VERSION}...")
@@ -786,19 +847,28 @@ class HardwareBenchmarkAgent:
         logger.info("Agent running. Press Ctrl+C to stop.")
         
         last_update_check = time.time()
+        last_metrics_push = 0
         UPDATE_CHECK_INTERVAL = 3600 * 24  # Check daily
+        METRICS_PUSH_INTERVAL = 10 # Push metrics every 10 seconds
         
         while self.running:
             try:
+                current_time = time.time()
+                
                 # Periodic update check
-                if time.time() - last_update_check > UPDATE_CHECK_INTERVAL:
+                if current_time - last_update_check > UPDATE_CHECK_INTERVAL:
                     if not self.current_task_id:  # Only check if idle
                         self.check_and_perform_updates()
-                        last_update_check = time.time()
+                        last_update_check = current_time
                 
                 # Send heartbeat
                 status = "testing" if self.current_task_id else "online"
                 self.send_heartbeat(status=status, current_task_id=self.current_task_id)
+                
+                # Push performance metrics
+                if current_time - last_metrics_push > METRICS_PUSH_INTERVAL:
+                    self.send_metrics()
+                    last_metrics_push = current_time
                 
                 # Poll for tasks
                 if not self.current_task_id:

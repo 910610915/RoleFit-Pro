@@ -75,6 +75,7 @@ celerybeat.pid
 # Agent
 device_id.txt
 agent.log
+hardware_report.txt
 
 # Runtime Database
 hardware_benchmark.db

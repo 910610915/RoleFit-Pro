@@ -90,7 +90,26 @@
             
             <!-- Floating AI Chat Button (Chrome extension style) -->
             <div class="ai-float-btn" @click="showAiDrawer = true" title="AI 助手">
-              <n-icon size="28"><HardwareChip /></n-icon>
+              <n-icon size="28">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- 背景光晕 -->
+                  <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" fill="currentColor" fill-opacity="0.1"/>
+                  
+                  <!-- 机器人头部轮廓 -->
+                  <path d="M19 10C19 8.34315 17.6569 7 16 7H8C6.34315 7 5 8.34315 5 10V14C5 15.6569 6.34315 17 8 17H16C17.6569 17 19 15.6569 19 14V10Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  
+                  <!-- 天线 -->
+                  <path d="M12 7V4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <circle cx="12" cy="3" r="1.5" fill="currentColor"/>
+                  
+                  <!-- 眼睛 -->
+                  <circle cx="9" cy="12" r="1.5" fill="currentColor"/>
+                  <circle cx="15" cy="12" r="1.5" fill="currentColor"/>
+                  
+                  <!-- 嘴巴（微笑） -->
+                  <path d="M10 15C10 15 10.5 15.5 12 15.5C13.5 15.5 14 15 14 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </n-icon>
             </div>
             
             <!-- AI Chat Drawer -->
@@ -193,6 +212,11 @@ const menuOptions = computed(() => [
     icon: renderIcon(Construct)
   },
   {
+    label: '性能监控',
+    key: 'Performance',
+    icon: renderIcon(HardwareChip)
+  },
+  {
     label: '测试软件',
     key: 'TestSoftware',
     icon: renderIcon(CodeSlash)
@@ -258,24 +282,26 @@ body {
   justify-content: center;
   gap: 10px;
   border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  background: transparent;
   padding: 0 16px;
 }
 
 .sidebar-logo .logo-icon {
   width: 36px;
   height: 36px;
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-logo .logo-text {
   font-size: 17px;
   font-weight: 700;
-  color: #fff;
+  color: #1e293b;
   letter-spacing: -0.3px;
 }
 
@@ -440,20 +466,22 @@ body {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
   z-index: 9999;
   transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ai-float-btn:hover {
   transform: scale(1.1);
-  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
 }
 
 .ai-float-btn:active {

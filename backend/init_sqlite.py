@@ -8,7 +8,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.sqlite import Base, User, Position, TestSoftware, JobScript, ScriptExecution, SoftwareMetrics
+from app.models.sqlite import (
+    Base, User, Position, TestSoftware, JobScript, ScriptExecution, SoftwareMetrics,
+    PerformanceMetric, SoftwareBenchmark, ControlCommand, PerformanceAlert, AIAnalysisReport
+)
 
 
 def init_database():

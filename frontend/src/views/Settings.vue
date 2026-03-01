@@ -22,7 +22,7 @@
                 <span class="unit-text">秒</span>
               </n-form-item>
               <n-form-item>
-                <n-button type="primary" class="save-btn" @click="saveSettings">保存设置</n-button>
+                <n-button type="primary" class="save-btn" style="color: #000" @click="saveSettings">保存设置</n-button>
               </n-form-item>
             </n-form>
           </n-card>
@@ -34,7 +34,7 @@
               <n-checkbox v-model:checked="settings.notify_on_task_complete">任务完成时通知</n-checkbox>
               <n-checkbox v-model:checked="settings.notify_on_device_offline">设备离线时通知</n-checkbox>
               <n-checkbox v-model:checked="settings.notify_on_standard_fail">标准检查失败时通知</n-checkbox>
-              <n-button type="primary" class="save-btn" style="margin-top: 16px" @click="saveSettings">保存设置</n-button>
+              <n-button type="primary" class="save-btn" style="margin-top: 16px; color: #000;" @click="saveSettings">保存设置</n-button>
             </n-space>
           </n-card>
         </n-tab-pane>
