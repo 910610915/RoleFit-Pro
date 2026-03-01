@@ -309,7 +309,7 @@ class HardwareBenchmarkAgent:
     # GitHub update configuration
     GITHUB_OWNER = "910610915" # 请根据实际情况修改
     GITHUB_REPO = "RoleFit-Pro" # 请根据实际情况修改
-    CURRENT_VERSION = "1.0.0"  # 当前版本号
+    CURRENT_VERSION = "1.0.1"  # 当前版本号
     
     def __init__(self, server_url: str, api_key: Optional[str] = None):
         self.server_url = server_url.rstrip('/')
