@@ -18,6 +18,12 @@ import threading
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
+# Try to import updater
+try:
+    from updater import GitHubUpdater
+except ImportError:
+    GitHubUpdater = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -39,206 +45,139 @@ class HardwareCollector:
     def get_cpu_info(self) -> Dict[str, Any]:
         """Get CPU information"""
         try:
-            cpu_info = {}
-            for cpu in self.wmi.Win32_Processor():
-                cpu_info = {
-                    "cpu_model": cpu.Name.strip() if cpu.Name else "Unknown",
-                    "cpu_cores": cpu.NumberOfCores,
-                    "cpu_threads": cpu.NumberOfLogicalProcessors,
-                    "cpu_base_clock": round(cpu.MaxClockSpeed / 1000, 2) if cpu.MaxClockSpeed else None
-                }
-                break
-            return cpu_info
+            cpu = self.wmi.Win32_Processor()[0]
+            return {
+                "cpu_model": cpu.Name.strip() if cpu.Name else "Unknown",
+                "cpu_cores": cpu.NumberOfCores,
+                "cpu_threads": cpu.NumberOfLogicalProcessors
+            }
         except Exception as e:
             logger.error(f"Failed to get CPU info: {e}")
             return {}
 
-    def _get_nvidia_vram(self) -> Optional[int]:
-        """Get NVIDIA GPU VRAM using nvidia-smi (more accurate)"""
+    def get_memory_info(self) -> Dict[str, Any]:
+        """Get RAM information"""
         try:
-            result = subprocess.run(
-                ['nvidia-smi', '--query-gpu=memory.total', '--format=csv,noheader,nounits'],
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                timeout=5
-            )
-            if result.returncode == 0:
-                vram_mib = int(result.stdout.strip().split('\n')[0])
-                return vram_mib
+            memory = self.wmi.Win32_PhysicalMemory()
+            total_memory = sum(int(m.Capacity) for m in memory)
+            total_gb = round(total_memory / (1024**3), 2)
+            
+            return {
+                "ram_total_gb": total_gb
+            }
         except Exception as e:
-            logger.debug(f"nvidia-smi not available: {e}")
-        return None
+            logger.error(f"Failed to get memory info: {e}")
+            return {}
     
     def get_gpu_info(self) -> Dict[str, Any]:
-        """Get GPU information - all GPUs"""
+        """Get GPU information"""
         try:
-            gpus = []
-            # Keywords to exclude virtual/display adapters
-            exclude_keywords = [
-                "virtual", "display", "basic", "microsoft", "standard",
-                "ramd", "llvmpipe", "softpipe", "swrast", "nvidiagt"
-            ]
+            gpus = self.wmi.Win32_VideoController()
+            gpu_list = []
             
-            # Try to get accurate NVIDIA VRAM first
-            nvidia_vram_mb = self._get_nvidia_vram()
-            
-            for gpu in self.wmi.Win32_VideoController():
-                try:
-                    vram_mb = 0
-                    gpu_name = gpu.Name.strip() if gpu.Name else "Unknown"
-                    
-                    # Use nvidia-smi if available and this is an NVIDIA GPU
-                    if nvidia_vram_mb and 'NVIDIA' in gpu_name.upper():
-                        vram_mb = nvidia_vram_mb
+            for gpu in gpus:
+                vram_gb = None
+                
+                # Check for NVIDIA GPU and try nvidia-smi
+                if 'NVIDIA' in (gpu.Name or '').upper():
+                    try:
+                        result = subprocess.run(
+                            ['nvidia-smi', '--query-gpu=memory.total', '--format=csv,noheader,nounits'],
+                            capture_output=True,
+                            text=True,
+                            encoding='utf-8',
+                            timeout=10 # Increased timeout
+                        )
+                        if result.returncode == 0:
+                            # Take the first one if multiple lines, assuming first GPU
+                            # Note: This might be inaccurate if multiple NVIDIA GPUs are present,
+                            # but matches hardware_check.py logic
+                            output = result.stdout.strip()
+                            if output:
+                                vram_mib = int(output.split('\n')[0])
+                                vram_gb = round(vram_mib / 1024, 2)
+                    except Exception as e:
+                        logger.warning(f"nvidia-smi failed: {e}")
+                
+                if vram_gb is None:
+                    if hasattr(gpu, 'AdapterRAM') and gpu.AdapterRAM:
+                        # AdapterRAM is in bytes
+                        try:
+                            vram_gb = round(int(gpu.AdapterRAM) / (1024**3), 2)
+                        except:
+                            vram_gb = 0.0
                     else:
-                        # Fallback to WMI
-                        vram_bytes = int(gpu.AdapterRAM) if gpu.AdapterRAM else 0
-                        vram_mb = vram_bytes // (1024 * 1024) if vram_bytes > 0 else 0
-                    
-                    # Skip virtual/display adapters
-                    gpu_name_lower = gpu_name.lower()
-                    is_virtual = any(kw in gpu_name_lower for kw in exclude_keywords)
-                    
-                    gpus.append({
-                        "name": gpu_name,
-                        "vram_mb": vram_mb,
-                        "driver_version": gpu.DriverVersion if gpu.DriverVersion else "",
-                        "is_virtual": is_virtual
-                    })
-                except Exception as e:
-                    logger.warning(f"Failed to get GPU info: {e}")
+                        vram_gb = 0.0
+                
+                gpu_list.append({
+                    "name": gpu.Name,
+                    "vram_gb": vram_gb
+                })
             
-            # Filter out virtual GPUs and find the best discrete GPU
-            real_gpus = [g for g in gpus if not g.get("is_virtual", True)]
+            # Find primary GPU (simply first one or first NVIDIA)
+            primary_gpu = None
+            if gpu_list:
+                # Prefer NVIDIA
+                for g in gpu_list:
+                    if 'NVIDIA' in (g['name'] or '').upper():
+                        primary_gpu = g
+                        break
+                if not primary_gpu:
+                    primary_gpu = gpu_list[0]
             
-            # If we have real GPUs, use the first one as primary
-            if real_gpus:
-                primary = real_gpus[0]
+            if primary_gpu:
                 return {
-                    "gpu_model": primary["name"],
-                    "gpu_vram_mb": primary["vram_mb"],
-                    "gpu_driver_version": primary["driver_version"],
-                    "all_gpus": gpus  # Store all GPUs including virtual
-                }
-            # Fallback to first GPU if no real GPU found
-            elif gpus:
-                return {
-                    "gpu_model": gpus[0]["name"],
-                    "gpu_vram_mb": gpus[0]["vram_mb"],
-                    "gpu_driver_version": gpus[0]["driver_version"],
-                    "all_gpus": gpus
+                    "gpu_model": primary_gpu["name"],
+                    "gpu_vram_mb": int(primary_gpu["vram_gb"] * 1024), # Convert back to MB for compatibility
+                    "all_gpus": gpu_list
                 }
             return {}
         except Exception as e:
             logger.error(f"Failed to get GPU info: {e}")
             return {}
     
-    def get_memory_info(self) -> Dict[str, Any]:
-        """Get RAM information with details"""
-        try:
-            mem = psutil.virtual_memory()
-            
-            # Get memory slots info via WMI
-            memory_modules = []
-            try:
-                for mem_module in self.wmi.Win32_PhysicalMemory():
-                    try:
-                        speed = mem_module.Speed if hasattr(mem_module, 'Speed') and mem_module.Speed else 0
-                        capacity_bytes = int(mem_module.Capacity) if mem_module.Capacity else 0
-                        capacity_mb = capacity_bytes // (1024 * 1024)
-                        
-                        memory_modules.append({
-                            "capacity_mb": capacity_mb,
-                            "speed": speed,
-                            "manufacturer": getattr(mem_module, 'Manufacturer', '') or ''
-                        })
-                    except:
-                        pass
-            except:
-                pass
-            
-            total_gb = round(mem.total / (1024**3), 2)
-            
-            # Calculate number of sticks
-            num_sticks = len(memory_modules) if memory_modules else 1
-            
-            # Get average frequency if available
-            frequencies = [m["speed"] for m in memory_modules if m["speed"] > 0]
-            avg_frequency = sum(frequencies) // len(frequencies) if frequencies else None
-            
-            return {
-                "ram_total_gb": total_gb,
-                "ram_frequency": avg_frequency,
-                "ram_sticks": num_sticks,
-                "ram_details": memory_modules
-            }
-        except Exception as e:
-            logger.error(f"Failed to get memory info: {e}")
-            return {"ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 2)}
-    
     def get_disk_info(self) -> Dict[str, Any]:
         """Get ALL disk information"""
         try:
-            disks = []
+            disks = self.wmi.Win32_DiskDrive()
+            disk_list = []
             
-            # NVMe SSD brand/model keywords
-            nvme_keywords = [
-                "nvme", "samsung", "wd", "western", "sn", "980", "990",
-                "gammix", "zhitai", "tiplus", "corsair", "crucial", 
-                "kingston", "intel", "sabrent", "adata", "p5", "p5+"
-            ]
+            for disk in disks:
+                size_gb = round(int(disk.Size) / (1024**3), 2) if disk.Size else 0
+                interface = disk.Description # hardware_check uses Description as interface
+                model = disk.Model
+                
+                # Better type detection logic
+                disk_type = "Unknown"
+                if "NVMe" in interface or "NVMe" in model:
+                    disk_type = "NVMe"
+                elif "SSD" in model or "Solid State" in model:
+                    disk_type = "SSD"
+                elif "USB" in interface or "USB" in model:
+                    disk_type = "USB"
+                elif "Fixed hard disk media" in interface: # Standard HDD description
+                     # If it was SSD, it would likely be caught above or have SSD in model
+                     # But some SSDs report as Fixed hard disk media. 
+                     # Check rotation rate if possible? WMI doesn't easily give rotation rate without smart.
+                     # Assume HDD if not marked as SSD/NVMe
+                     disk_type = "HDD"
+                
+                disk_list.append({
+                    "model": model,
+                    "interface": interface,
+                    "size_gb": size_gb,
+                    # Add compatibility fields
+                    "capacity_tb": round(size_gb / 1024, 2),
+                    "type": disk_type
+                })
             
-            for disk in self.wmi.Win32_DiskDrive():
-                try:
-                    size_bytes = int(disk.Size) if disk.Size else 0
-                    capacity_tb = round(size_bytes / (1024**4), 2) if size_bytes > 0 else 0
-                    
-                    # Determine disk type
-                    model = disk.Model.lower() if disk.Model else ""
-                    media_type = getattr(disk, 'MediaType', '') or ''
-                    interface = getattr(disk, 'InterfaceType', '') or ''
-                    
-                    # Check NVMe via interface type first (most reliable)
-                    if interface.lower() == "nvme" or "nvme" in interface.lower():
-                        disk_type = "NVMe"
-                    # Check via media type
-                    elif "nvme" in media_type.lower():
-                        disk_type = "NVMe"
-                    elif "ssd" in media_type.lower():
-                        disk_type = "SSD"
-                    elif "hdd" in media_type.lower() or "hard disk" in media_type.lower():
-                        disk_type = "HDD"
-                    # Check via model name for known NVMe SSD brands
-                    elif any(kw in model for kw in nvme_keywords):
-                        if size_bytes > 0:
-                            capacity_gb = size_bytes / (1024**3)
-                            # Larger SSDs (>256GB) are likely NVMe
-                            if capacity_gb > 256:
-                                disk_type = "NVMe"
-                            else:
-                                disk_type = "SSD"
-                        else:
-                            disk_type = "SSD"
-                    else:
-                        disk_type = "Unknown"
-                    
-                    disks.append({
-                        "model": disk.Model.strip() if disk.Model else "Unknown",
-                        "capacity_tb": capacity_tb,
-                        "type": disk_type,
-                        "interface": interface
-                    })
-                except Exception as e:
-                    logger.warning(f"Failed to get disk info: {e}")
-            
-            # Return first disk as primary
-            if disks:
+            if disk_list:
+                primary_disk = disk_list[0]
                 return {
-                    "disk_model": disks[0]["model"],
-                    "disk_capacity_tb": disks[0]["capacity_tb"],
-                    "disk_type": disks[0]["type"],
-                    "all_disks": disks
+                    "disk_model": primary_disk["model"],
+                    "disk_capacity_tb": primary_disk["capacity_tb"],
+                    "disk_type": primary_disk["type"],
+                    "all_disks": disk_list
                 }
             return {}
         except Exception as e:
@@ -367,6 +306,11 @@ class SystemMonitor:
 class HardwareBenchmarkAgent:
     """Main agent class for hardware benchmark reporting"""
     
+    # GitHub update configuration
+    GITHUB_OWNER = "910610915" # 请根据实际情况修改
+    GITHUB_REPO = "RoleFit-Pro" # 请根据实际情况修改
+    CURRENT_VERSION = "1.0.0"  # 当前版本号
+    
     def __init__(self, server_url: str, api_key: Optional[str] = None):
         self.server_url = server_url.rstrip('/')
         self.api_key = api_key
@@ -378,6 +322,15 @@ class HardwareBenchmarkAgent:
         self.task_poll_interval = 10  # seconds
         self.current_task_id = None
         self.current_execution_id = None
+        
+        # Initialize updater
+        self.updater = None
+        if GitHubUpdater:
+            self.updater = GitHubUpdater(
+                self.GITHUB_OWNER, 
+                self.GITHUB_REPO, 
+                self.CURRENT_VERSION
+            )
         
         # Import script executor
         try:
@@ -784,9 +737,35 @@ class HardwareBenchmarkAgent:
                 # Process one task at a time
                 break
     
+    def check_and_perform_updates(self):
+        """Check for updates and perform if available"""
+        if not self.updater:
+            return
+            
+        try:
+            logger.info("Performing update check...")
+            release = self.updater.check_for_updates()
+            if release:
+                self.updater.perform_update(release)
+        except Exception as e:
+            logger.error(f"Update check error: {e}")
+
     def run(self):
         """Main agent loop"""
-        logger.info("Starting Hardware Benchmark Agent...")
+        logger.info(f"Starting Hardware Benchmark Agent v{self.CURRENT_VERSION}...")
+        
+        # Cleanup old updates
+        if getattr(sys, 'frozen', False):
+            old_exe = sys.executable + ".old"
+            if os.path.exists(old_exe):
+                try:
+                    os.remove(old_exe)
+                    logger.info("Cleaned up old version backup.")
+                except:
+                    pass
+        
+        # Initial update check
+        self.check_and_perform_updates()
         
         # Get device ID
         self.device_id = self.get_or_create_device_id()
@@ -806,8 +785,17 @@ class HardwareBenchmarkAgent:
         # Main loop
         logger.info("Agent running. Press Ctrl+C to stop.")
         
+        last_update_check = time.time()
+        UPDATE_CHECK_INTERVAL = 3600 * 24  # Check daily
+        
         while self.running:
             try:
+                # Periodic update check
+                if time.time() - last_update_check > UPDATE_CHECK_INTERVAL:
+                    if not self.current_task_id:  # Only check if idle
+                        self.check_and_perform_updates()
+                        last_update_check = time.time()
+                
                 # Send heartbeat
                 status = "testing" if self.current_task_id else "online"
                 self.send_heartbeat(status=status, current_task_id=self.current_task_id)
