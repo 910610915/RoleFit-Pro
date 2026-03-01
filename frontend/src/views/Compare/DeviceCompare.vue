@@ -261,9 +261,9 @@ const loadDevices = async () => {
       value: d.id
     }))
     console.log('Device options:', deviceOptions.value)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to load devices:', error)
-    console.error('Error:', error.response?.data)
+    console.error('Error:', error?.response?.data || error)
   }
 }
 

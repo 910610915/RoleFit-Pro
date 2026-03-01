@@ -1,12 +1,23 @@
 <template>
-  <div class="standard-manage">
-    <n-h1>标准管理</n-h1>
+  <div class="standard-manage-page">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-title">
+          <n-icon size="28" color="#0ea5e9"><Construct /></n-icon>
+          <n-h1 class="title">标准管理</n-h1>
+        </div>
+      </div>
+    </div>
     
-    <n-card>
+    <!-- Table -->
+    <n-card class="table-card">
       <n-data-table
         :columns="columns"
         :data="standards"
         :loading="loading"
+        :bordered="false"
+        class="standard-table"
       />
     </n-card>
   </div>
@@ -15,7 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted, h, computed } from 'vue'
 import { NCard, NH1, NDataTable, NTag, NButton, NSpace, NIcon } from 'naive-ui'
-import { Pencil, Trash } from '@vicons/ionicons5'
+import { Pencil, Trash, Construct } from '@vicons/ionicons5'
 
 const standards = ref([
   {
@@ -77,7 +88,57 @@ const columns = computed(() => [
 </script>
 
 <style scoped>
-.standard-manage {
-  padding: 20px;
+.standard-manage-page {
+  padding: 0;
+  min-height: 100%;
+  background: #f8fafc;
+}
+
+/* Header */
+.page-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-title .title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Table Card */
+.table-card {
+  margin: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.standard-table :deep(.n-data-table-th) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 600;
+  color: #475569;
+}
+
+.standard-table :deep(.n-data-table-tr:hover) {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.standard-table :deep(.n-data-table-td) {
+  padding: 12px 16px;
 }
 </style>

@@ -1,36 +1,59 @@
 <template>
-  <div class="script-list">
-    <div class="header">
-      <n-h1>岗位测试脚本</n-h1>
-      <n-button type="primary" @click="openAddModal">
-        <template #icon><n-icon><add /></n-icon></template>
-        添加脚本
-      </n-button>
+  <div class="script-list-page">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-title">
+          <n-icon size="28" color="#0ea5e9"><PlayCircle /></n-icon>
+          <n-h1 class="title">岗位测试脚本</n-h1>
+        </div>
+        <n-button type="primary" class="add-btn" @click="openAddModal">
+          <template #icon><n-icon><Add /></n-icon></template>
+          添加脚本
+        </n-button>
+      </div>
     </div>
     
     <!-- Filters -->
     <n-card class="filter-card">
-      <n-space>
-        <n-select v-model:value="filters.position_id" placeholder="岗位" :options="positionOptions" clearable style="width: 150px" />
-        <n-select v-model:value="filters.software_id" placeholder="软件" :options="softwareOptions" clearable style="width: 150px" />
-        <n-button @click="loadScripts">搜索</n-button>
-      </n-space>
+      <div class="filter-row">
+        <n-select 
+          v-model:value="filters.position_id" 
+          placeholder="关联岗位" 
+          :options="positionOptions" 
+          clearable 
+          class="filter-select" 
+        />
+        <n-select 
+          v-model:value="filters.software_id" 
+          placeholder="关联软件" 
+          :options="softwareOptions" 
+          clearable 
+          class="filter-select" 
+        />
+        <n-button type="primary" class="search-btn" @click="loadScripts">
+          <template #icon><n-icon><Search /></n-icon></template>
+          搜索
+        </n-button>
+      </div>
     </n-card>
     
     <!-- Table -->
-    <n-card>
+    <n-card class="table-card">
       <n-data-table
         :columns="columns"
         :data="scripts"
         :loading="loading"
         :pagination="pagination"
         :row-key="(row: Script) => row.id"
+        :bordered="false"
+        class="script-table"
       />
     </n-card>
     
     <!-- Add/Edit Modal -->
-    <n-modal v-model:show="showModal" preset="card" :title="isEdit ? '编辑脚本' : '添加脚本'" style="width: 700px">
-      <n-form ref="formRef" :model="scriptForm" :rules="rules">
+    <n-modal v-model:show="showModal" preset="card" :title="isEdit ? '编辑脚本' : '添加新脚本'" style="width: 700px" class="custom-modal">
+      <n-form ref="formRef" :model="scriptForm" :rules="rules" label-placement="left" label-width="100px">
         <n-form-item label="脚本名称" path="script_name">
           <n-input v-model:value="scriptForm.script_name" placeholder="如：UE5项目启动测试" />
         </n-form-item>
@@ -46,7 +69,7 @@
         <n-form-item label="脚本类型" path="script_type">
           <n-select v-model:value="scriptForm.script_type" :options="scriptTypeOptions" placeholder="选择类型" />
         </n-form-item>
-        <n-form-item label="期望时长(秒)" path="expected_duration">
+        <n-form-item label="期望时长" path="expected_duration">
           <n-input-number v-model:value="scriptForm.expected_duration" :min="10" :max="36000" />
         </n-form-item>
         <n-form-item label="脚本内容" path="script_content">
@@ -54,10 +77,10 @@
         </n-form-item>
       </n-form>
       <template #footer>
-        <n-space justify="end">
+        <div class="modal-footer">
           <n-button @click="showModal = false">取消</n-button>
           <n-button type="primary" @click="handleSave" :loading="saving">保存</n-button>
-        </n-space>
+        </div>
       </template>
     </n-modal>
   </div>
@@ -69,7 +92,7 @@ import { useMessage } from 'naive-ui'
 import { 
   NCard, NH1, NButton, NSpace, NSelect, NDataTable, NModal, NForm, NFormItem, NIcon, NTag, NPopconfirm, NInputNumber 
 } from 'naive-ui'
-import { Add, Trash, Pencil } from '@vicons/ionicons5'
+import { Add, Trash, Pencil, PlayCircle, Search } from '@vicons/ionicons5'
 import { scriptApi, type Script } from '@/api/scripts'
 import { positionApi } from '@/api/positions'
 import { softwareApi } from '@/api/software'
@@ -327,18 +350,122 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.script-list {
-  padding: 20px;
+.script-list-page {
+  padding: 0;
+  min-height: 100%;
+  background: #f8fafc;
 }
 
-.header {
+/* Header */
+.page-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-title .title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.add-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.add-btn:hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Filter Card */
 .filter-card {
-  margin-bottom: 20px;
+  margin: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.filter-card :deep(.n-card__content) {
+  padding: 16px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-select {
+  width: 160px;
+}
+
+.search-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+/* Table Card */
+.table-card {
+  margin: 0 24px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.script-table :deep(.n-data-table-th) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 600;
+  color: #475569;
+}
+
+.script-table :deep(.n-data-table-tr:hover) {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.script-table :deep(.n-data-table-td) {
+  padding: 12px 16px;
+}
+
+/* Modal */
+.custom-modal :deep(.n-card) {
+  border-radius: 16px;
+}
+
+.custom-modal :deep(.n-card-header__main) {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-footer .n-button:last-child {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 8px;
 }
 </style>

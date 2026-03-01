@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
 
-from app.core.database import get_db
+from app.core.database import get_db_sync
 from app.models.sqlite import ScriptExecution
 from app.schemas.execution import ExecutionCreate, ExecutionUpdate, ExecutionResponse, ExecutionListResponse
 
@@ -18,7 +18,7 @@ def list_executions(
     task_id: Optional[str] = None,
     script_id: Optional[str] = None,
     device_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取脚本执行记录列表"""
     query = select(ScriptExecution)
@@ -33,7 +33,7 @@ def list_executions(
     count_result = db.execute(select(func.count(ScriptExecution.id)))
     total = count_result.scalar() or 0
     
-    query = query.order_by(ScriptExecution.start_time.desc()).offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(ScriptExecution.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = db.execute(query)
     items = result.scalars().all()
     
@@ -48,7 +48,7 @@ def list_executions(
 @router.post("", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
 def create_execution(
     data: ExecutionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """创建脚本执行记录"""
     execution = ScriptExecution(
@@ -64,7 +64,7 @@ def create_execution(
 @router.get("/{execution_id}", response_model=ExecutionResponse)
 def get_execution(
     execution_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取执行记录详情"""
     result = db.execute(select(ScriptExecution).where(ScriptExecution.id == execution_id))
@@ -78,7 +78,7 @@ def get_execution(
 def update_execution(
     execution_id: str,
     data: ExecutionUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """更新执行记录(主要用于更新结束时间和状态)"""
     result = db.execute(select(ScriptExecution).where(ScriptExecution.id == execution_id))
@@ -101,7 +101,7 @@ def update_execution(
 @router.delete("/{execution_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_execution(
     execution_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """删除执行记录"""
     result = db.execute(select(ScriptExecution).where(ScriptExecution.id == execution_id))

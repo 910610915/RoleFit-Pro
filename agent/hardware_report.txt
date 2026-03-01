@@ -1,0 +1,20 @@
+==================================================
+电脑硬件体检报告
+==================================================
+处理器 (CPU): AMD Ryzen 7 5800X 8-Core Processor             
+物理核心数: 8
+逻辑核心数: 16
+总内存 (RAM): 32.0GB
+显卡信息:
+  - GameViewer Virtual Display Adapter (显存: 0.0GB)
+  - NVIDIA GeForce RTX 5070 (显存: 11.94GB)
+
+磁盘信息:
+  - XPG GAMMIX S50 Lite
+    接口: NVMe 磁盘
+    容量: 953.87GB
+  - ZHITAI TiPlus7100 4TB
+    接口: NVMe 磁盘
+    容量: 3815.45GB
+
+操作系统: Windows 10.0.26200

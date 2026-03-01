@@ -548,9 +548,9 @@ onMounted(() => {
   z-index: 100;
   
   .login-btn {
-    background: #000;
-    color: #fff;
-    border: none;
+    background: #fff;
+    color: #000;
+    border: 1px solid #000;
     padding: 12px 28px;
     border-radius: 28px;
     font-size: 15px;
@@ -558,7 +558,7 @@ onMounted(() => {
     transition: all 0.2s;
     
     &:hover {
-      background: #333;
+      background: #f5f5f5;
       transform: scale(1.05);
     }
   }

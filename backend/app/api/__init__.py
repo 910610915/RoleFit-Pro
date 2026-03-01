@@ -9,16 +9,22 @@ from app.api.software import router as software_router
 from app.api.scripts import router as scripts_router
 from app.api.executions import router as executions_router
 from app.api.agent import router as agent_router
+from app.api.llm import router as llm_router
+from app.api.llm_config import router as llm_config_router
+from app.api.performance import router as performance_router
 
 __all__ = [
-    "auth_router", 
-    "devices_router", 
-    "tasks_router", 
+    "auth_router",
+    "devices_router",
+    "tasks_router",
     "results_router",
     "stats_router",
     "positions_router",
     "software_router",
     "scripts_router",
     "executions_router",
-    "agent_router"
+    "agent_router",
+    "llm_router",
+    "llm_config_router",
+    "performance_router",
 ]

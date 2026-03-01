@@ -72,6 +72,51 @@ export interface DeviceParams {
   keyword?: string
 }
 
+// Performance metric types
+export interface PerformanceMetric {
+  id: string
+  device_id: string
+  timestamp: string
+  cpu_percent?: number
+  gpu_percent?: number
+  memory_percent?: number
+  disk_read_mbps?: number
+  disk_write_mbps?: number
+  network_sent_mbps?: number
+  network_recv_mbps?: number
+}
+
+export interface PerformanceMetricResponse {
+  total: number
+  items: PerformanceMetric[]
+}
+
+export interface DeviceStatus {
+  device_id: string
+  latest_metric?: PerformanceMetric
+  pending_alerts_count: number
+  recent_benchmarks: any[]
+  status: string
+}
+
+export interface Benchmark {
+  id: string
+  device_id: string
+  software_code: string
+  benchmark_type: string
+  timestamp: string
+  status: string
+  score?: number
+}
+
+export interface Task {
+  id: string
+  task_name: string
+  task_type: string
+  task_status: string
+  created_at: string
+}
+
 export const deviceApi = {
   list: (params?: DeviceParams) => 
     api.get<DeviceListResponse>('/devices', { params }),
@@ -86,5 +131,46 @@ export const deviceApi = {
     api.put<Device>(`/devices/${id}`, data),
   
   delete: (id: string) => 
-    api.delete(`/devices/${id}`)
+    api.delete(`/devices/${id}`),
+    
+  // Performance metrics
+  getMetrics: (deviceId: string, params?: { limit?: number; offset?: number }) =>
+    api.get<PerformanceMetricResponse>(`/performance/metrics`, { 
+      params: { device_id: deviceId, ...params } 
+    }),
+    
+  getLatestMetric: (deviceId: string) =>
+    api.get<PerformanceMetric>(`/performance/metrics/latest`, {
+      params: { device_id: deviceId }
+    }),
+    
+  getRealtimeMetrics: (deviceId: string, seconds?: number) =>
+    api.get<{ device_id: string; metrics: PerformanceMetric[]; averages: any }>(
+      `/performance/metrics/realtime/${deviceId}`,
+      { params: { seconds } }
+    ),
+    
+  // Device status
+  getStatus: (deviceId: string) =>
+    api.get<DeviceStatus>(`/performance/devices/${deviceId}/status`),
+    
+  // Benchmarks
+  getBenchmarks: (params?: { device_id?: string; software_code?: string; limit?: number }) =>
+    api.get<{ total: number; items: Benchmark[] }>('/performance/benchmarks', { params }),
+    
+  // Tasks
+  getTasks: (params?: { page?: number; page_size?: number; task_status?: string }) =>
+    api.get<{ total: number; items: Task[] }>('/tasks', { params }),
+    
+  createTask: (data: any) =>
+    api.post<Task>('/tasks', data)
 }
+
+// 兼容导出
+export const getDevices = deviceApi.list
+export const getDeviceById = deviceApi.get
+export const getDeviceStatus = deviceApi.getStatus
+export const getPerformanceMetrics = deviceApi.getMetrics
+export const getBenchmarks = deviceApi.getBenchmarks
+export const getTasks = deviceApi.getTasks
+export const createTask = deviceApi.createTask

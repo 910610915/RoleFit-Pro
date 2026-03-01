@@ -1,35 +1,58 @@
 <template>
-  <div class="execution-list">
-    <div class="header">
-      <n-h1>执行记录</n-h1>
-      <n-button type="primary" @click="refreshData">
-        <template #icon><n-icon><refresh /></n-icon></template>
-        刷新
-      </n-button>
+  <div class="execution-list-page">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-title">
+          <n-icon size="28" color="#0ea5e9"><Time /></n-icon>
+          <n-h1 class="title">执行记录</n-h1>
+        </div>
+        <n-button type="primary" class="refresh-btn" @click="refreshData">
+          <template #icon><n-icon><Refresh /></n-icon></template>
+          刷新
+        </n-button>
+      </div>
     </div>
     
     <!-- Filters -->
     <n-card class="filter-card">
-      <n-space>
-        <n-select v-model:value="filters.device_id" placeholder="设备" :options="deviceOptions" clearable style="width: 150px" />
-        <n-select v-model:value="filters.script_id" placeholder="脚本" :options="scriptOptions" clearable style="width: 180px" />
-        <n-button @click="loadExecutions">搜索</n-button>
-      </n-space>
+      <div class="filter-row">
+        <n-select 
+          v-model:value="filters.device_id" 
+          placeholder="选择设备" 
+          :options="deviceOptions" 
+          clearable 
+          class="filter-select" 
+        />
+        <n-select 
+          v-model:value="filters.script_id" 
+          placeholder="选择脚本" 
+          :options="scriptOptions" 
+          clearable 
+          class="filter-select" 
+        />
+        <n-button type="primary" class="search-btn" @click="loadExecutions">
+          <template #icon><n-icon><Search /></n-icon></template>
+          搜索
+        </n-button>
+      </div>
     </n-card>
     
     <!-- Table -->
-    <n-card>
+    <n-card class="table-card">
       <n-data-table
         :columns="columns"
         :data="executions"
         :loading="loading"
         :pagination="pagination"
         :row-key="(row: Execution) => row.id"
+        :bordered="false"
+        class="execution-table"
       />
     </n-card>
     
     <!-- Detail Modal -->
-    <n-modal v-model:show="showDetail" preset="card" title="执行详情" style="width: 700px">
+    <n-modal v-model:show="showDetail" preset="card" title="执行详情" style="width: 700px" class="custom-modal">
       <n-descriptions v-if="selectedExecution" label-placement="left" :column="2">
         <n-descriptions-item label="执行ID">{{ selectedExecution.id }}</n-descriptions-item>
         <n-descriptions-item label="状态">
@@ -53,7 +76,7 @@ import { useMessage } from 'naive-ui'
 import { 
   NCard, NH1, NButton, NSpace, NSelect, NDataTable, NModal, NDescriptions, NDescriptionsItem, NTag, NIcon 
 } from 'naive-ui'
-import { Refresh, Eye, PlayCircle, CheckmarkCircle, CloseCircle } from '@vicons/ionicons5'
+import { Refresh, Eye, PlayCircle, CheckmarkCircle, CloseCircle, Time, Search } from '@vicons/ionicons5'
 import { executionApi, type Execution } from '@/api/executions'
 import { deviceApi } from '@/api/devices'
 import { scriptApi } from '@/api/scripts'
@@ -211,18 +234,111 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.execution-list {
-  padding: 20px;
+.execution-list-page {
+  padding: 0;
+  min-height: 100%;
+  background: #f8fafc;
 }
 
-.header {
+/* Header */
+.page-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-title .title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.refresh-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.refresh-btn:hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Filter Card */
 .filter-card {
-  margin-bottom: 20px;
+  margin: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.filter-card :deep(.n-card__content) {
+  padding: 16px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-select {
+  width: 160px;
+  border-radius: 8px;
+}
+
+.search-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+/* Table Card */
+.table-card {
+  margin: 0 24px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.execution-table :deep(.n-data-table-th) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 600;
+  color: #475569;
+}
+
+.execution-table :deep(.n-data-table-tr:hover) {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.execution-table :deep(.n-data-table-td) {
+  padding: 12px 16px;
+}
+
+/* Modal */
+.custom-modal :deep(.n-card) {
+  border-radius: 16px;
+}
+
+.custom-modal :deep(.n-card-header__main) {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
 }
 </style>

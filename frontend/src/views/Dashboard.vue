@@ -23,73 +23,71 @@
     <div class="dashboard-content">
       <!-- Stats Section -->
       <section class="stats-section">
-        <div class="stat-card" v-for="(stat, index) in stats" :key="index">
-          <div class="stat-icon">
-            <n-icon size="32" :color="stat.color">
-              <component :is="stat.icon" />
-            </n-icon>
+        <InspiraCard 
+          v-for="(stat, index) in stats" 
+          :key="index"
+          variant="spotlight"
+          class="stat-card"
+        >
+          <div class="stat-content">
+            <div class="stat-icon" :style="{ background: stat.color + '20' }">
+              <n-icon size="28" :color="stat.color">
+                <component :is="stat.icon" />
+              </n-icon>
+            </div>
+            <div class="stat-info">
+              <InspiraNumberTicker 
+                :value="stat.value" 
+                class="stat-value" 
+              />
+              <div class="stat-label">{{ stat.label }}</div>
+            </div>
           </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stat.value }}</div>
-            <div class="stat-label">{{ stat.label }}</div>
-          </div>
-        </div>
+        </InspiraCard>
       </section>
       
       <!-- Feature Cards Grid -->
       <section class="feature-section">
-        <h2 class="section-title">功能导航</h2>
-        <div class="feature-grid">
-          <div 
-            class="feature-card" 
+        <h2 class="section-title">
+          <span class="title-text">功能导航</span>
+        </h2>
+        <InspiraBentoGrid :cols="3" gap="lg" class="feature-grid">
+          <InspiraCard 
             v-for="card in visibleCards" 
             :key="card.id"
+            variant="spotlight"
+            class="feature-card"
             @click="navigateTo(card.route)"
           >
-            <div class="card-icon">
-              <n-icon size="48">
-                <component :is="getIcon(card.icon)" />
-              </n-icon>
+            <div class="card-inner">
+              <div class="card-icon">
+                <n-icon size="42">
+                  <component :is="getIcon(card.icon)" />
+                </n-icon>
+              </div>
+              <div class="card-content">
+                <h3>{{ card.title }}</h3>
+                <p>{{ card.description }}</p>
+              </div>
+              <div class="card-arrow">
+                <n-icon size="18"><ArrowForward /></n-icon>
+              </div>
             </div>
-            <div class="card-content">
-              <h3>{{ card.title }}</h3>
-              <p>{{ card.description }}</p>
-            </div>
-            <div class="card-arrow">
-              <n-icon size="20"><ArrowForward /></n-icon>
-            </div>
-          </div>
-        </div>
+          </InspiraCard>
+        </InspiraBentoGrid>
       </section>
       
       <!-- Quick Charts -->
       <section class="charts-section">
-        <div class="chart-card">
+        <InspiraCard variant="glare" class="chart-card">
           <h3>设备状态分布</h3>
           <div ref="statusChartRef" style="height: 280px;"></div>
-        </div>
-        <div class="chart-card">
+        </InspiraCard>
+        <InspiraCard variant="glare" class="chart-card">
           <h3>性能评分趋势</h3>
           <div ref="trendChartRef" style="height: 280px;"></div>
-        </div>
+        </InspiraCard>
       </section>
-    </div>
-    
-    <!-- User Info Bottom Left -->
-    <div class="user-info-bar">
-      <div class="user-avatar">
-        <n-icon size="24"><PersonCircle /></n-icon>
-      </div>
-      <div class="user-details">
-        <span class="username">{{ currentUser?.username || '用户' }}</span>
-        <span class="role">{{ currentUser?.role === 'admin' ? '管理员' : '普通用户' }}</span>
-      </div>
-      <n-button size="small" quaternary @click="handleLogout">
-        <template #icon>
-          <n-icon><LogOut /></n-icon>
-        </template>
-        退出
-      </n-button>
     </div>
   </div>
 </template>
@@ -102,6 +100,8 @@ import ParticleBackgroundWhite from '@/components/ParticleBackgroundWhite.vue'
 import { featureCardApi, type FeatureCard } from '@/api/featureCards'
 import { statsApi } from '@/api/stats'
 import * as echarts from 'echarts'
+// Inspira UI Components
+import { InspiraCard, InspiraNumberTicker, InspiraBentoGrid } from '@/components/inspira'
 import {
   Desktop,
   People,
@@ -318,30 +318,25 @@ onMounted(() => {
 .stats-section {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
+  gap: 20px;
   margin-bottom: 48px;
 }
 
 .stat-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px;
+  :deep(.card-content) {
+    padding: 0;
+  }
+}
+
+.stat-content {
   display: flex;
   align-items: center;
-  gap: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-  }
+  gap: 16px;
   
   .stat-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
-    background: #f8f9fa;
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -349,16 +344,16 @@ onMounted(() => {
   
   .stat-info {
     .stat-value {
-      font-size: 32px;
+      font-size: 28px;
       font-weight: 700;
       color: #000;
       line-height: 1.2;
     }
     
     .stat-label {
-      font-size: 14px;
+      font-size: 13px;
       color: #666;
-      margin-top: 4px;
+      margin-top: 2px;
     }
   }
 }
@@ -372,42 +367,35 @@ onMounted(() => {
     font-weight: 600;
     color: #000;
     margin-bottom: 24px;
+    
+    .title-text {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
   }
 }
 
 .feature-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  // Bento grid handles the layout
 }
 
 .feature-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 28px 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
+  min-height: 100px;
   
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-    
-    .card-arrow {
-      opacity: 1;
-      transform: translateX(0);
-    }
+  .card-inner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 100%;
   }
   
   .card-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 14px;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     display: flex;
     align-items: center;
@@ -421,30 +409,30 @@ onMounted(() => {
     min-width: 0;
     
     h3 {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       color: #000;
-      margin: 0 0 6px 0;
+      margin: 0 0 4px 0;
     }
     
     p {
-      font-size: 13px;
+      font-size: 12px;
       color: #666;
       margin: 0;
       line-height: 1.4;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
   }
   
   .card-arrow {
-    position: absolute;
-    right: 20px;
     color: #999;
-    opacity: 0;
-    transform: translateX(-10px);
-    transition: all 0.3s ease;
+    flex-shrink: 0;
+  }
+  
+  &:hover {
+    .card-arrow {
+      transform: translateX(4px);
+      color: #6366f1;
+    }
   }
 }
 
@@ -452,19 +440,14 @@ onMounted(() => {
 .charts-section {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  gap: 20px;
 }
 
 .chart-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  
   h3 {
     font-size: 16px;
     font-weight: 600;
-    color: #000;
+    color: #fff;
     margin: 0 0 16px 0;
   }
 }

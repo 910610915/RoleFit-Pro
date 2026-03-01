@@ -5,7 +5,14 @@ from app.core.config import settings
 from app.core.database import sync_engine, Base
 
 # Import models to register them with Base.metadata
-from app.models.sqlite import FeatureCard
+from app.models.sqlite import (
+    FeatureCard,
+    PerformanceMetric,
+    SoftwareBenchmark,
+    ControlCommand,
+    PerformanceAlert,
+    AIAnalysisReport,
+)
 
 # Import API routers
 from app.api import (
@@ -21,9 +28,17 @@ from app.api import (
     agent as agent_router,
     alarms as alarms_router,
     feature_cards as feature_cards_router,
-    database as database_router
+    database as database_router,
+    llm as llm_router,
+    llm_config as llm_config_router,
+    performance as performance_router,
+    ai_analysis as ai_analysis_router,
 )
 from app.api import websocket as websocket_router
+from app.api import scheduler as scheduler_router
+
+# Import scheduler service
+from app.services.scheduler_service import init_scheduler, stop_scheduler
 
 # Create FastAPI application
 app = FastAPI(
@@ -57,7 +72,12 @@ app.include_router(agent_router.router, prefix="/api/agent", tags=["Agent"])
 app.include_router(alarms_router.router, prefix="/api", tags=["Alarms"])
 app.include_router(feature_cards_router.router, prefix="/api", tags=["Feature Cards"])
 app.include_router(database_router.router, prefix="/api", tags=["Database"])
+app.include_router(llm_router.router, tags=["LLM"])
+app.include_router(llm_config_router.router, tags=["LLM Config"])
+app.include_router(performance_router.router, prefix="/api", tags=["Performance"])
+app.include_router(ai_analysis_router.router, prefix="/api", tags=["AI Analysis"])
 app.include_router(websocket_router.router, tags=["WebSocket"])
+app.include_router(scheduler_router.router, prefix="/api", tags=["Scheduler"])
 
 
 @app.on_event("startup")
@@ -67,10 +87,15 @@ async def startup_event():
     with sync_engine.begin() as conn:
         Base.metadata.create_all(conn)
 
+    # Start task scheduler
+    await init_scheduler()
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
+    # Stop task scheduler
+    await stop_scheduler()
     sync_engine.dispose()
 
 
@@ -80,7 +105,7 @@ async def root():
     return {
         "message": "Welcome to HardwareBenchmark API",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 

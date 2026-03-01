@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from typing import Optional
 import json
 
-from app.core.database import get_db
+from app.core.database import get_db_sync
 from app.models.sqlite import JobScript
 from app.schemas.script import ScriptCreate, ScriptUpdate, ScriptResponse, ScriptListResponse
 
@@ -32,14 +32,12 @@ def list_scripts(
     page_size: int = Query(20, ge=1, le=100),
     position_id: Optional[str] = None,
     software_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取岗位测试脚本列表"""
     query = select(JobScript).where(JobScript.is_active == True)
     
-    # 处理多岗位筛选
     if position_id:
-        # 检查position_id是否在position_ids数组中
         query = query.where(JobScript.position_ids.like(f'%{position_id}%'))
     
     if software_id:
@@ -63,13 +61,11 @@ def list_scripts(
 @router.post("", response_model=ScriptResponse, status_code=status.HTTP_201_CREATED)
 def create_script(
     data: ScriptCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """创建岗位测试脚本"""
-    # 转换position_ids为JSON字符串
     script_data = data.model_dump()
     
-    # 处理position_ids
     pos_ids = script_data.get('position_ids')
     if pos_ids is not None and isinstance(pos_ids, list):
         script_data['position_ids'] = json.dumps(pos_ids)
@@ -80,14 +76,13 @@ def create_script(
     db.add(script)
     db.commit()
     db.refresh(script)
-    # 使用 script_to_response 转换响应格式
     return ScriptResponse.model_validate(script_to_response(script))
 
 
 @router.get("/{script_id}", response_model=ScriptResponse)
 def get_script(
     script_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取脚本详情"""
     result = db.execute(select(JobScript).where(JobScript.id == script_id))
@@ -101,7 +96,7 @@ def get_script(
 def update_script(
     script_id: str,
     data: ScriptUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """更新脚本"""
     result = db.execute(select(JobScript).where(JobScript.id == script_id))
@@ -111,7 +106,6 @@ def update_script(
     
     update_data = data.model_dump(exclude_unset=True)
     
-    # 转换position_ids为JSON字符串
     if 'position_ids' in update_data:
         if update_data['position_ids']:
             update_data['position_ids'] = json.dumps(update_data['position_ids'])
@@ -123,14 +117,13 @@ def update_script(
     
     db.commit()
     db.refresh(script)
-    # 使用 script_to_response 转换响应格式
     return ScriptResponse.model_validate(script_to_response(script))
 
 
 @router.delete("/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_script(
     script_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """删除脚本(软删除)"""
     result = db.execute(select(JobScript).where(JobScript.id == script_id))

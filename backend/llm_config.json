@@ -1,0 +1,7 @@
+{
+  "provider": "zhipu",
+  "api_key": "a64a6f0f7bcb4b438361dbc75281498b.AdIAD3t6Q4tERv1O",
+  "model": "GLM-4.5-Flash",
+  "is_active": true,
+  "status": "ok"
+}

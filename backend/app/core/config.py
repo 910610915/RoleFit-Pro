@@ -15,18 +15,9 @@ class Settings(BaseSettings):
     app_name: str = "HardwareBenchmark"
     debug: bool = True
     
-    # Database
-    database_url: str = "postgresql+asyncpg://benchmark:benchmark@postgres:5432/benchmark_db"
-    database_url_sync: str = "postgresql://benchmark:benchmark@postgres:5432/benchmark_db"
-    
-    # Redis
-    redis_url: Optional[str] = None
-    
-    # InfluxDB
-    influxdb_url: Optional[str] = None
-    influxdb_token: Optional[str] = None
-    influxdb_org: Optional[str] = None
-    influxdb_bucket: Optional[str] = None
+    # Database (SQLite)
+    database_url: str = "sqlite+aiosqlite:///./hardware_benchmark.db"
+    database_url_sync: str = "sqlite:///./hardware_benchmark.db"
     
     # JWT
     secret_key: str = "your-secret-key-change-in-production"
@@ -47,6 +38,25 @@ class Settings(BaseSettings):
     
     # Software Storage
     software_storage_path: str = "software"
+    
+    # ================================================
+    # LLM Configuration (多 AI 提供商)
+    # ================================================
+    # 当前使用的 AI 提供商: siliconflow/minimax/deepseek/zhipu/qwen/openai
+    llm_provider: str = "siliconflow"
+    
+    # API Key (用于 AI 提供商认证)
+    llm_api_key: str = ""
+    
+    # 默认模型 (在对应提供商处配置)
+    llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
+    
+    # 请求超时时间 (秒)
+    llm_timeout: int = 60
+    
+    # 备用提供商配置 (当主提供商失败时自动切换)
+    llm_backup_provider: Optional[str] = None
+    llm_backup_api_key: Optional[str] = None
 
 
 settings = Settings()

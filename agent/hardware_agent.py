@@ -10,6 +10,7 @@ import logging
 import platform
 import uuid
 import requests
+import subprocess
 import psutil
 import wmi
 import winreg
@@ -51,6 +52,23 @@ class HardwareCollector:
         except Exception as e:
             logger.error(f"Failed to get CPU info: {e}")
             return {}
+
+    def _get_nvidia_vram(self) -> Optional[int]:
+        """Get NVIDIA GPU VRAM using nvidia-smi (more accurate)"""
+        try:
+            result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=memory.total', '--format=csv,noheader,nounits'],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=5
+            )
+            if result.returncode == 0:
+                vram_mib = int(result.stdout.strip().split('\n')[0])
+                return vram_mib
+        except Exception as e:
+            logger.debug(f"nvidia-smi not available: {e}")
+        return None
     
     def get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information - all GPUs"""
@@ -62,16 +80,21 @@ class HardwareCollector:
                 "ramd", "llvmpipe", "softpipe", "swrast", "nvidiagt"
             ]
             
+            # Try to get accurate NVIDIA VRAM first
+            nvidia_vram_mb = self._get_nvidia_vram()
+            
             for gpu in self.wmi.Win32_VideoController():
                 try:
-                    vram_bytes = 0
-                    try:
-                        vram_bytes = int(gpu.AdapterRAM) if gpu.AdapterRAM else 0
-                    except:
-                        pass
-                    
+                    vram_mb = 0
                     gpu_name = gpu.Name.strip() if gpu.Name else "Unknown"
-                    vram_mb = vram_bytes // (1024 * 1024) if vram_bytes > 0 else 0
+                    
+                    # Use nvidia-smi if available and this is an NVIDIA GPU
+                    if nvidia_vram_mb and 'NVIDIA' in gpu_name.upper():
+                        vram_mb = nvidia_vram_mb
+                    else:
+                        # Fallback to WMI
+                        vram_bytes = int(gpu.AdapterRAM) if gpu.AdapterRAM else 0
+                        vram_mb = vram_bytes // (1024 * 1024) if vram_bytes > 0 else 0
                     
                     # Skip virtual/display adapters
                     gpu_name_lower = gpu_name.lower()

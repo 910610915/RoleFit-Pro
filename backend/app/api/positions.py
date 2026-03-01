@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from typing import Optional
 
-from app.core.database import get_db
+from app.core.database import get_db_sync
 from app.models.sqlite import Position
 from app.schemas.position import PositionCreate, PositionUpdate, PositionResponse, PositionListResponse
 
@@ -15,7 +15,7 @@ def list_positions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     department: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取岗位列表"""
     query = select(Position).where(Position.is_active == True)
@@ -43,7 +43,7 @@ def list_positions(
 @router.post("", response_model=PositionResponse, status_code=status.HTTP_201_CREATED)
 def create_position(
     data: PositionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """创建岗位"""
     position = Position(**data.model_dump())
@@ -56,7 +56,7 @@ def create_position(
 @router.get("/{position_id}", response_model=PositionResponse)
 def get_position(
     position_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取岗位详情"""
     result = db.execute(select(Position).where(Position.id == position_id))
@@ -70,7 +70,7 @@ def get_position(
 def update_position(
     position_id: str,
     data: PositionUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """更新岗位"""
     result = db.execute(select(Position).where(Position.id == position_id))
@@ -89,7 +89,7 @@ def update_position(
 @router.delete("/{position_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_position(
     position_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """删除岗位(软删除)"""
     result = db.execute(select(Position).where(Position.id == position_id))

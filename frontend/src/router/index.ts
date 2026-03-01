@@ -74,6 +74,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/performance',
+    name: 'Performance',
+    component: () => import('@/views/Performance/Performance.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/ai-chat',
+    name: 'AIChat',
+    component: () => import('@/views/AIChat/AIChat.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/positions',
     name: 'PositionList',
     component: () => import('@/views/Positions/PositionList.vue'),

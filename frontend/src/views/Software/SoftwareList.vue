@@ -1,34 +1,51 @@
 <template>
-  <div class="software-list">
-    <div class="header">
-      <n-h1>测试软件管理</n-h1>
-      <n-button type="primary" @click="openAddModal">
-        <template #icon><n-icon><add /></n-icon></template>
-        添加软件
-      </n-button>
+  <div class="software-list-page">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-title">
+          <n-icon size="28" color="#0ea5e9"><CodeSlash /></n-icon>
+          <n-h1 class="title">测试软件管理</n-h1>
+        </div>
+        <n-button type="primary" class="add-btn" @click="openAddModal">
+          <template #icon><n-icon><Add /></n-icon></template>
+          添加软件
+        </n-button>
+      </div>
     </div>
     
     <!-- Filters -->
     <n-card class="filter-card">
-      <n-space>
-        <n-select v-model:value="filters.category" placeholder="类别" :options="categoryOptions" clearable style="width: 150px" />
-        <n-button @click="loadSoftware">搜索</n-button>
-      </n-space>
+      <div class="filter-row">
+        <n-select 
+          v-model:value="filters.category" 
+          placeholder="软件类别" 
+          :options="categoryOptions" 
+          clearable 
+          class="category-select" 
+        />
+        <n-button type="primary" class="search-btn" @click="loadSoftware">
+          <template #icon><n-icon><Search /></n-icon></template>
+          搜索
+        </n-button>
+      </div>
     </n-card>
     
     <!-- Table -->
-    <n-card>
+    <n-card class="table-card">
       <n-data-table
         :columns="columns"
         :data="softwareList"
         :loading="loading"
         :pagination="pagination"
         :row-key="(row: Software) => row.id"
+        :bordered="false"
+        class="software-table"
       />
     </n-card>
     
     <!-- Add/Edit Modal -->
-    <n-modal v-model:show="showModal" preset="card" :title="isEdit ? '编辑软件' : '添加软件'" style="width: 700px; max-height: 80vh; overflow-y: auto">
+    <n-modal v-model:show="showModal" preset="card" :title="isEdit ? '编辑软件' : '添加新软件'" style="width: 700px; max-height: 80vh; overflow-y: auto" class="custom-modal">
       <n-form ref="formRef" :model="softwareForm" :rules="rules" label-placement="top">
         <!-- 基础信息 -->
         <n-divider title-placement="left">基础信息</n-divider>
@@ -57,16 +74,6 @@
           <n-gi>
             <n-form-item label="版本" path="version">
               <n-input v-model:value="softwareForm.version" placeholder="如：v1.0" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="图标" path="icon">
-              <n-select 
-                v-model:value="softwareForm.icon" 
-                :options="iconOptions" 
-                placeholder="选择图标"
-                clearable
-              />
             </n-form-item>
           </n-gi>
         </n-grid>
@@ -145,10 +152,10 @@
         
       </n-form>
       <template #footer>
-        <n-space justify="end">
+        <div class="modal-footer">
           <n-button @click="showModal = false">取消</n-button>
           <n-button type="primary" @click="handleSave" :loading="saving">保存</n-button>
-        </n-space>
+        </div>
       </template>
     </n-modal>
   </div>
@@ -161,7 +168,7 @@ import {
   NCard, NH1, NButton, NSpace, NSelect, NDataTable, NModal, NForm, NFormItem, 
   NIcon, NTag, NPopconfirm, NGrid, NGi, NDivider, NInput
 } from 'naive-ui'
-import { Add } from '@vicons/ionicons5'
+import { Add, CodeSlash, Search } from '@vicons/ionicons5'
 import { softwareApi, type Software } from '@/api/software'
 
 const message = useMessage()
@@ -188,7 +195,6 @@ const softwareForm = reactive({
   version: '',
   description: '',
   launch_params: '',
-  icon: '',
   // 安装配置
   software_type: 'portable' as 'installer' | 'portable' | undefined,
   package_format: undefined as 'exe' | 'msi' | 'zip' | 'rar' | '7z' | undefined,
@@ -238,84 +244,6 @@ const detectionMethodOptions = [
   { label: '注册表检测', value: 'registry' }
 ]
 
-// 软件图标映射
-const softwareIcons: Record<string, string> = {
-  'pcmark10': '/software-logos/PCMark 10.png',
-  'pcmark': '/software-logos/PCMark 10.png',
-  '3dmark': '/software-logos/3DMark.webp',
-  '3dmark-vr': '/software-logos/VRMark.svg',
-  'vrmark': '/software-logos/VRMark.svg',
-  'cinebench': '/software-logos/Cinebench R23.png',
-  'cinebenchr23': '/software-logos/Cinebench R23.png',
-  'geekbench': '/software-logos/Geekbench.webp',
-  'passmark': '/software-logos/PassMark.webp',
-  'novabench': '/software-logos/Novabench.webp',
-  'userbenchmark': '/software-logos/UserBenchmark.png',
-  'aida64': '/software-logos/AIDA64.png',
-  'prime95': '/software-logos/Prime95.png',
-  'furmark': '/software-logos/FurMark.webp',
-  'unigine': '/software-logos/Unigine.png',
-  'crystaldiskmark': '/software-logos/CrystalDiskMark.webp',
-  'crystaldiskinfo': '/software-logos/CrystalDiskInfo.png',
-  'as SSD': '/software-logos/AS SSD.png',
-  'asssd': '/software-logos/AS SSD.png',
-  'attodiskbenchmark': '/software-logos/ATTO.webp',
-  'atto': '/software-logos/ATTO.webp',
-  'testmem5': '/software-logos/TestMem5.png',
-  'memtest86': '/software-logos/MemTest86.jpg'
-}
-
-const getSoftwareIcon = (softwareCode: string): string | null => {
-  if (!softwareCode) return null
-  const key = softwareCode.toLowerCase().replace(/[^a-z0-9]/g, '')
-  return softwareIcons[key] || null
-}
-
-// 可选图标列表
-const iconOptions = [
-  { label: 'PCMark 10', value: '/software-logos/PCMark 10.png' },
-  { label: '3DMark', value: '/software-logos/3DMark.webp' },
-  { label: 'VRMark', value: '/software-logos/VRMark.svg' },
-  { label: 'Cinebench R23', value: '/software-logos/Cinebench R23.png' },
-  { label: 'Geekbench', value: '/software-logos/Geekbench.webp' },
-  { label: 'PassMark', value: '/software-logos/PassMark.webp' },
-  { label: 'Novabench', value: '/software-logos/Novabench.webp' },
-  { label: 'UserBenchmark', value: '/software-logos/UserBenchmark.png' },
-  { label: 'AIDA64', value: '/software-logos/AIDA64.png' },
-  { label: 'Prime95', value: '/software-logos/Prime95.png' },
-  { label: 'FurMark', value: '/software-logos/FurMark.webp' },
-  { label: 'Unigine', value: '/software-logos/Unigine.png' },
-  { label: 'CrystalDiskMark', value: '/software-logos/CrystalDiskMark.webp' },
-  { label: 'CrystalDiskInfo', value: '/software-logos/CrystalDiskInfo.png' },
-  { label: 'AS SSD', value: '/software-logos/AS SSD.png' },
-  { label: 'ATTO', value: '/software-logos/ATTO.webp' },
-  { label: 'TestMem5', value: '/software-logos/TestMem5.png' },
-  { label: 'MemTest86', value: '/software-logos/MemTest86.jpg' }
-]
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 20,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  showQuickJumper: true,
-  itemCount: 0,
-  onChange: (page: number) => {
-    filters.page = page
-    loadSoftware()
-  },
-  onUpdatePageSize: (pageSize: number) => {
-    filters.page_size = pageSize
-    loadSoftware()
-  }
-})
-
-const getCategoryLabel = (value: string | undefined) => {
-  if (!value) return '-'
-  const option = categoryOptions.find(o => o.value === value)
-  return option ? option.label : value
-}
-
 const getSoftwareTypeLabel = (value: string | undefined) => {
   if (!value) return '-'
   const option = softwareTypeOptions.find(o => o.value === value)
@@ -323,23 +251,6 @@ const getSoftwareTypeLabel = (value: string | undefined) => {
 }
 
 const columns = computed(() => [
-  {
-    title: '图标',
-    key: 'icon',
-    width: 60,
-    render: (row: Software) => {
-      // 优先使用数据库中的图标，否则使用自动匹配
-      const icon = row.icon || getSoftwareIcon(row.software_code)
-      if (icon) {
-        return h('img', { 
-          src: icon, 
-          style: 'width: 32px; height: 32px; object-fit: contain; border-radius: 4px;',
-          alt: row.software_name
-        })
-      }
-      return h('div', { style: 'width: 32px; height: 32px; background: #eee; border-radius: 4px;' })
-    }
-  },
   {
     title: '软件名称',
     key: 'software_name',
@@ -402,12 +313,29 @@ const columns = computed(() => [
   }
 ])
 
+const pagination = ref({
+  page: 1,
+  pageSize: 20,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  showQuickJumper: true,
+  itemCount: 0,
+  onChange: (page: number) => {
+    filters.page = page
+    loadSoftware()
+  },
+  onUpdatePageSize: (pageSize: number) => {
+    filters.page_size = pageSize
+    loadSoftware()
+  }
+})
+
 const loadSoftware = async () => {
   loading.value = true
   try {
     const res = await softwareApi.list(filters)
     softwareList.value = res.data.items
-    pagination.itemCount = res.data.total
+    pagination.value.itemCount = res.data.total
   } catch (e: any) {
     message.error('加载软件列表失败: ' + (e.message || '未知错误'))
   } finally {
@@ -423,7 +351,6 @@ const resetForm = () => {
   softwareForm.version = ''
   softwareForm.description = ''
   softwareForm.launch_params = ''
-  softwareForm.icon = ''
   softwareForm.software_type = 'portable'
   softwareForm.package_format = undefined
   softwareForm.storage_path = ''
@@ -454,7 +381,6 @@ const openEditModal = (row: Software) => {
   softwareForm.version = row.version || ''
   softwareForm.description = row.description || ''
   softwareForm.launch_params = row.launch_params || ''
-  softwareForm.icon = row.icon || ''
   softwareForm.software_type = row.software_type || 'portable'
   softwareForm.package_format = row.package_format
   softwareForm.storage_path = row.storage_path || ''
@@ -509,18 +435,123 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.software-list {
-  padding: 20px;
+.software-list-page {
+  padding: 0;
+  min-height: 100%;
+  background: #f8fafc;
 }
 
-.header {
+/* Header */
+.page-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-title .title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.add-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.add-btn:hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Filter Card */
 .filter-card {
-  margin-bottom: 20px;
+  margin: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.filter-card :deep(.n-card__content) {
+  padding: 16px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.category-select {
+  width: 160px;
+  border-radius: 8px;
+}
+
+.search-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+/* Table Card */
+.table-card {
+  margin: 0 24px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.software-table :deep(.n-data-table-th) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 600;
+  color: #475569;
+}
+
+.software-table :deep(.n-data-table-tr:hover) {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.software-table :deep(.n-data-table-td) {
+  padding: 12px 16px;
+}
+
+/* Modal */
+.custom-modal :deep(.n-card) {
+  border-radius: 16px;
+}
+
+.custom-modal :deep(.n-card-header__main) {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-footer .n-button:last-child {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 8px;
 }
 </style>

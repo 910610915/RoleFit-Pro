@@ -6,7 +6,7 @@ from typing import Optional, List
 import os
 import glob as glob_module
 
-from app.core.database import get_db
+from app.core.database import get_db_sync
 from app.core.config import settings
 from app.models.sqlite import TestSoftware
 from app.schemas.software import (
@@ -32,7 +32,7 @@ def list_software(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取测试软件列表"""
     query = select(TestSoftware).where(TestSoftware.is_active == True)
@@ -58,7 +58,7 @@ def list_software(
 @router.post("", response_model=SoftwareResponse, status_code=status.HTTP_201_CREATED)
 def create_software(
     data: SoftwareCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """创建测试软件"""
     # 检查 software_code 是否已存在
@@ -79,7 +79,7 @@ def create_software(
 @router.get("/{software_id}", response_model=SoftwareResponse)
 def get_software(
     software_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取软件详情"""
     result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
@@ -93,7 +93,7 @@ def get_software(
 def update_software(
     software_id: str,
     data: SoftwareUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """更新软件"""
     result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
@@ -112,7 +112,7 @@ def update_software(
 @router.delete("/{software_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_software(
     software_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """删除软件(软删除)"""
     result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
@@ -125,12 +125,12 @@ def delete_software(
     return None
 
 
-# ====== 新增: 软件分发相关 API ======
+# ====== 软件分发相关 API ======
 
 @router.get("/for-task/{software_id}", response_model=SoftwareForTask)
 def get_software_for_task(
     software_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """获取软件信息（用于任务下发到Agent）"""
     result = db.execute(select(TestSoftware).where(TestSoftware.id == software_id))
@@ -163,7 +163,7 @@ def get_software_for_task(
 @router.get("/download/{software_code}")
 def download_software(
     software_code: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db_sync)
 ):
     """下载软件包"""
     # 查询软件信息
@@ -178,8 +178,8 @@ def download_software(
         raise HTTPException(status_code=404, detail="Software not found")
     
     # 提取值
-    storage_path_val = str(software.storage_path) if software.storage_path else None
-    package_format_val = str(software.package_format) if software.package_format else None
+    storage_path_val = software.storage_path if software.storage_path else None
+    package_format_val = software.package_format if software.package_format else None
     
     # 确定存储路径
     storage_dir = get_software_storage_dir()
@@ -203,25 +203,24 @@ def download_software(
             allowed_extensions = ['.exe']
         elif format_ext == 'msi':
             allowed_extensions = ['.msi']
-        elif format_ext in ['zip', 'rar', '7z']:
-            allowed_extensions = [f'.{format_ext}', '.zip', '.rar', '.7z']
-    else:
-        allowed_extensions = ['.exe', '.msi', '.zip', '.rar', '.7z']
+        elif format_ext == 'zip':
+            allowed_extensions = ['.zip']
+        elif format_ext == 'rar':
+            allowed_extensions = ['.rar']
+        elif format_ext == '7z':
+            allowed_extensions = ['.7z']
     
-    # 查找文件
-    found_files = []
+    # 搜索文件
+    files_found = []
     for ext in allowed_extensions:
         pattern = os.path.join(software_dir, f"*{ext}")
-        found_files.extend(glob_module.glob(pattern))
+        files_found.extend(glob_module.glob(pattern))
     
-    if not found_files:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"No installation package found. Expected formats: {', '.join(allowed_extensions)}"
-        )
+    if not files_found:
+        raise HTTPException(status_code=404, detail=f"No package files found for format: {format_ext}")
     
-    # 返回第一个找到的文件
-    file_path = found_files[0]
+    # 返回第一个匹配的文件
+    file_path = files_found[0]
     filename = os.path.basename(file_path)
     
     return FileResponse(
@@ -229,42 +228,3 @@ def download_software(
         filename=filename,
         media_type='application/octet-stream'
     )
-
-
-@router.get("/list-files/{software_code}")
-def list_software_files(
-    software_code: str,
-    db: Session = Depends(get_db)
-):
-    """列出软件目录中的文件（用于调试）"""
-    # 查询软件信息
-    result = db.execute(
-        select(TestSoftware).where(
-            TestSoftware.software_code == software_code,
-            TestSoftware.is_active == True
-        )
-    )
-    software = result.scalar_one_or_none()
-    if not software:
-        raise HTTPException(status_code=404, detail="Software not found")
-    
-    # 确定存储路径
-    storage_dir = get_software_storage_dir()
-    software_dir = os.path.join(storage_dir, software_code)
-    
-    if not os.path.exists(software_dir):
-        return {"files": [], "message": "Software directory not found"}
-    
-    # 递归列出所有文件
-    files = []
-    for root, dirs, filenames in os.walk(software_dir):
-        for filename in filenames:
-            full_path = os.path.join(root, filename)
-            rel_path = os.path.relpath(full_path, software_dir)
-            size_mb = os.path.getsize(full_path) / (1024 * 1024)
-            files.append({
-                "path": rel_path,
-                "size_mb": round(size_mb, 2)
-            })
-    
-    return {"files": files}

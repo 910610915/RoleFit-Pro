@@ -159,7 +159,7 @@ const getIconUrl = (filename: string) => {
 const cpuSoftware = [
   {
     name: 'Geekbench',
-    iconUrl: getIconUrl('Geekbench.webp'),
+    iconUrl: getIconUrl('Geekbench.png'),
     iconColor: '#FF6B00',
     description: '跨平台的处理器性能测试工具，支持Windows、Mac、Linux、iOS和Android。',
     features: ['CPU单核', 'CPU多核', 'GPU测试', 'AI测试'],
@@ -167,7 +167,7 @@ const cpuSoftware = [
   },
   {
     name: 'Cinebench',
-    iconUrl: getIconUrl('Cinebench R23.png'),
+    iconUrl: getIconUrl('Geekbench.png'),
     iconColor: '#000000',
     description: '基于Cinema 4D的CPU和GPU渲染性能测试软件，广泛用于评估处理器性能。',
     features: ['CPU单核', 'CPU多核', 'GPU渲染', 'OpenGL'],
@@ -175,7 +175,7 @@ const cpuSoftware = [
   },
   {
     name: 'Prime95',
-    iconUrl: getIconUrl('Prime95.png'),
+    iconUrl: getIconUrl('Geekbench.png'),
     iconColor: '#008000',
     description: '著名的CPU压力测试工具，用于测试CPU的稳定性和计算能力。',
     features: ['CPU压力测试', '稳定性测试', 'FFT测试', 'Torture Test'],
@@ -191,7 +191,7 @@ const cpuSoftware = [
   },
   {
     name: 'PassMark',
-    iconUrl: getIconUrl('PassMark.webp'),
+    iconUrl: getIconUrl('Geekbench.png'),
     iconColor: '#00B460',
     description: '全面的电脑性能基准测试软件，提供CPU、显卡、内存、磁盘等多项测试。',
     features: ['CPU测试', '2D图形', '3D图形', '内存', '磁盘'],
@@ -203,7 +203,7 @@ const cpuSoftware = [
 const gpuSoftware = [
   {
     name: '3DMark',
-    iconUrl: getIconUrl('3DMark.webp'),
+    iconUrl: getIconUrl('3DMark.png'),
     iconColor: '#FF6600',
     description: '业界最权威的图形性能基准测试软件，用于测试显卡的DirectX和OpenGL性能。',
     features: ['Time Spy', 'Port Royal', 'Fire Strike', '光追测试'],
@@ -211,7 +211,7 @@ const gpuSoftware = [
   },
   {
     name: 'FurMark',
-    iconUrl: getIconUrl('FurMark.webp'),
+    iconUrl: getIconUrl('FurMark.png'),
     iconColor: '#5586A4',
     description: 'OpenGL基准测试工具，专门用于测试显卡的渲染性能和温度表现。',
     features: ['GPU压力测试', 'FPS测试', '温度监控', 'OGL4.0'],
@@ -227,7 +227,7 @@ const gpuSoftware = [
   },
   {
     name: 'VRMark',
-    iconUrl: getIconUrl('VRMark.svg'),
+    iconUrl: getIconUrl('3DMark.png'),
     iconColor: '#00D4FF',
     description: '专业的VR性能基准测试工具，帮助评估设备的VR运行能力。',
     features: ['VR性能测试', 'Orange Room', 'Blue Room', 'Cyan Room'],
@@ -239,7 +239,7 @@ const gpuSoftware = [
 const memorySoftware = [
   {
     name: 'MemTest86',
-    iconUrl: getIconUrl('MemTest86.jpg'),
+    iconUrl: getIconUrl('MemTest86.png'),
     iconColor: '#0099FF',
     description: '最权威的内存测试软件，在DOS环境下运行，不受操作系统影响。',
     features: ['内存错误检测', '启动盘测试', '多通道测试', 'ECC检测'],
@@ -267,7 +267,7 @@ const memorySoftware = [
 const diskSoftware = [
   {
     name: 'CrystalDiskMark',
-    iconUrl: getIconUrl('CrystalDiskMark.webp'),
+    iconUrl: getIconUrl('CrystalDiskMark.png'),
     iconColor: '#0078D4',
     description: '简单易用的磁盘基准测试工具，测试硬盘的顺序和随机读写速度。',
     features: ['顺序读写', '4K随机', '队列深度', '多线程'],
@@ -283,7 +283,7 @@ const diskSoftware = [
   },
   {
     name: 'ATTO',
-    iconUrl: getIconUrl('ATTO.webp'),
+    iconUrl: getIconUrl('ATTO.png'),
     iconColor: '#00A4E4',
     description: '业界标准的磁盘基准测试工具，测试不同数据块大小的传输速率。',
     features: ['块大小测试', '线性测试', 'IOPS测试', '延迟测试'],
@@ -311,7 +311,7 @@ const comprehensiveSoftware = [
   },
   {
     name: 'UserBenchmark',
-    iconUrl: getIconUrl('UserBenchmark.png'),
+    iconUrl: getIconUrl('Geekbench.png'),
     iconColor: '#FF6600',
     description: '用户驱动的硬件性能对比平台，帮助用户了解硬件在同类产品中的排名。',
     features: ['CPU对比', 'GPU对比', 'SSD对比', '用户评分'],
@@ -319,7 +319,7 @@ const comprehensiveSoftware = [
   },
   {
     name: 'Novabench',
-    iconUrl: getIconUrl('Novabench.webp'),
+    iconUrl: getIconUrl('Geekbench.png'),
     iconColor: '#0099FF',
     description: '快速的系统基准测试工具，简单操作即可获得完整的性能评分。',
     features: ['CPU测试', 'GPU测试', 'RAM测试', '磁盘测试'],

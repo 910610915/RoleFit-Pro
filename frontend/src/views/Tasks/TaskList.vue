@@ -1,20 +1,29 @@
 <template>
-  <div class="task-list">
-    <div class="header">
-      <n-h1>任务管理</n-h1>
-      <n-button type="primary" @click="router.push('/tasks/create')">
-        <template #icon><n-icon><add /></n-icon></template>
-        创建任务
-      </n-button>
+  <div class="task-list-page">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-title">
+          <n-icon size="28" color="#0ea5e9"><List /></n-icon>
+          <n-h1 class="title">任务管理</n-h1>
+        </div>
+        <n-button type="primary" class="add-btn" @click="router.push('/tasks/create')">
+          <template #icon><n-icon><Add /></n-icon></template>
+          创建任务
+        </n-button>
+      </div>
     </div>
     
-    <n-card>
+    <!-- Table -->
+    <n-card class="table-card">
       <n-data-table
         :columns="columns"
         :data="tasks"
         :loading="loading"
         :pagination="pagination"
         :row-key="(row: TestTask) => row.id"
+        :bordered="false"
+        class="task-table"
       />
     </n-card>
   </div>
@@ -24,7 +33,7 @@
 import { ref, reactive, onMounted, h, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NH1, NButton, NSpace, NDataTable, NTag, NIcon } from 'naive-ui'
-import { Add, Play, Stop } from '@vicons/ionicons5'
+import { Add, Play, Stop, List } from '@vicons/ionicons5'
 import { taskApi, type TestTask } from '@/api/tasks'
 
 const router = useRouter()
@@ -129,14 +138,70 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.task-list {
-  padding: 20px;
+.task-list-page {
+  padding: 0;
+  min-height: 100%;
+  background: #f8fafc;
 }
 
-.header {
+/* Header */
+.page-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-title .title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.add-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.add-btn:hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Table Card */
+.table-card {
+  margin: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.task-table :deep(.n-data-table-th) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 600;
+  color: #475569;
+}
+
+.task-table :deep(.n-data-table-tr:hover) {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.task-table :deep(.n-data-table-td) {
+  padding: 12px 16px;
 }
 </style>
