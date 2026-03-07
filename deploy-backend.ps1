@@ -51,6 +51,7 @@ echo   依赖安装完成
 echo.
 echo [3/6] 初始化数据库...
 python init_sqlite.py >nul 2>&1
+python add_test_data.py >nul 2>&1
 echo   数据库初始化完成
 
 echo.

@@ -145,6 +145,10 @@ if %errorlevel% neq 0 (
     echo [OK] Test data added
 )
 
+echo.
+echo [INFO] Adding historical data...
+echo.
+
 python add_more_results.py
 
 if %errorlevel% neq 0 (
