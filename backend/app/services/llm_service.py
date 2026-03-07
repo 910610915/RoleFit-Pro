@@ -117,10 +117,30 @@ class LLMProvider:
             api_key: API Key，如果不提供则使用配置中的默认 Key
         """
         self.provider = provider
-        provider_config = self.PROVIDERS.get(provider)
         
-        if not provider_config:
-            raise ValueError(f"不支持的 AI 提供商: {provider}")
+        # 允许自定义提供商
+        if provider not in self.PROVIDERS:
+            if provider == "custom":
+                # 自定义提供商默认配置
+                provider_config = {
+                    "name": "Custom",
+                    "base_url": "http://localhost:11434/v1", # 默认本地 Ollama
+                    "default_model": "llama3",
+                    "free": True,
+                    "models": []
+                }
+            else:
+                # 尝试作为自定义处理，或者抛出异常
+                # 这里我们宽容处理，假设是 custom
+                provider_config = {
+                    "name": provider,
+                    "base_url": "",
+                    "default_model": "",
+                    "free": True,
+                    "models": []
+                }
+        else:
+            provider_config = self.PROVIDERS.get(provider)
         
         self.base_url = provider_config["base_url"]
         # 优先使用 settings 中的模型配置
@@ -131,9 +151,11 @@ class LLMProvider:
         self.api_key = api_key or settings.llm_api_key
         
         # 创建 OpenAI 客户端 (兼容所有 OpenAI 格式的 API)
+        # 注意：如果 base_url 是空的 (custom 且未设置)，OpenAI 库会报错
+        # 这种情况下应该在调用 chat 之前设置 base_url
         self.client = OpenAI(
-            base_url=self.base_url,
-            api_key=self.api_key,
+            base_url=self.base_url if self.base_url else "https://api.openai.com/v1", # 避免初始化报错
+            api_key=self.api_key if self.api_key else "dummy", # 避免初始化报错
             timeout=settings.llm_timeout
         )
     
