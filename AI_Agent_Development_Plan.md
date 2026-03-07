@@ -109,7 +109,7 @@
 
 ## 4. 开发步骤
 
-### 第一阶段：后端基础建设 (Backend)
+### 第一阶段：后端基础建设 (Backend) - [Completed]
 
 1.  **创建工具库 (`app/core/tools.py`)**：
     *   实现 `get_devices`, `get_device_status` 等 Python 函数。
@@ -122,7 +122,7 @@
 3.  **暴露 API (`app/api/agent.py`)**：
     *   创建 `/api/llm/agent/chat` 接口。
 
-### 第二阶段：前端对接 (Frontend)
+### 第二阶段：前端对接 (Frontend) - [Completed]
 
 1.  **更新 API 客户端 (`frontend/src/api/ai.ts`)**：
     *   新增 `agentChat` 方法。
@@ -131,6 +131,16 @@
     *   **删除**原有的 `handleIntent` 正则匹配逻辑。
     *   **修改**发送逻辑，直接调用 `agentChat`。
     *   **优化**消息渲染，支持 Markdown 表格和代码块的高亮显示（AI 返回的数据通常是 Markdown 格式）。
+
+### 第三阶段：配置与优化 (Configuration & UX) - [Completed]
+
+1.  **自定义 AI 提供商**：
+    *   在前端添加配置界面，支持自定义 Base URL、API Key 和模型名称。
+    *   后端支持动态接收前端传递的配置参数。
+
+2.  **UI/UX 优化**：
+    *   解决悬浮按钮遮挡输入框的问题。
+    *   移除旧版 AI 功能入口。
 
 ---
 
