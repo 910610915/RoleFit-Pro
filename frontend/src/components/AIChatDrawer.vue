@@ -15,6 +15,14 @@
 
     <!-- 聊天消息列表 -->
     <div class="chat-messages" ref="messagesContainer">
+      <div v-if="messages.length === 0" class="chat-empty">
+        <div class="empty-state">
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=RoleFitAI" alt="AI" class="empty-icon" />
+          <p>你好！我是 RoleFit Pro AI 助手 🤖</p>
+          <p class="sub-text">你可以问我关于设备状态、测试任务或性能分析的问题</p>
+        </div>
+      </div>
+      
       <div
         v-for="(msg, index) in messages"
         :key="index"
@@ -46,12 +54,20 @@
     
     <!-- 输入框 -->
     <div class="chat-input">
+      <div class="input-actions" v-if="messages.length > 0">
+        <n-button quaternary circle size="small" @click="clearHistory" title="清除历史记录">
+          <template #icon>
+            <n-icon><TrashIcon /></n-icon>
+          </template>
+        </n-button>
+      </div>
       <n-input
         v-model:value="inputText"
         type="textarea"
         placeholder="输入你的问题..."
         :autosize="{ minRows: 1, maxRows: 3 }"
         class="chat-input-field"
+        :disabled="loading"
         @keydown.enter.exact.prevent="sendMessage"
       />
       <n-button 
@@ -122,13 +138,14 @@ import {
   Send as SendIcon,
   PersonCircle as UserIcon,
   HardwareChip as BotIcon,
-  SettingsOutline as SettingsIcon
+  SettingsOutline as SettingsIcon,
+  TrashOutline as TrashIcon
 } from '@vicons/ionicons5'
 import { marked } from 'marked'
 import api from '@/api'
 
 // API
-import { agentChat } from '@/api/ai'
+import { agentChat, testConnection as apiTestConnection } from '@/api/ai'
 
 const message = useMessage()
 const inputText = ref('')
@@ -137,7 +154,33 @@ const messagesContainer = ref(null)
 const showSettings = ref(false)
 const testing = ref(false)
 
-// Settings
+// Init messages from localStorage
+const storedMessages = localStorage.getItem('chat_history')
+const initialMessages = storedMessages ? JSON.parse(storedMessages) : []
+const messages = ref(initialMessages)
+
+// If empty, show welcome message is handled by template now, but let's keep array empty initially
+// Or if you prefer a default welcome message in history:
+if (messages.value.length === 0) {
+  // Optional: Add default welcome message if history is empty
+  // messages.value.push({
+  //   role: 'assistant',
+  //   content: '你好！我是 RoleFit Pro AI 助手 🤖...',
+  //   timestamp: new Date().toISOString()
+  // })
+}
+
+// Watch messages and save to localStorage
+import { watch } from 'vue'
+watch(messages, (newVal) => {
+  localStorage.setItem('chat_history', JSON.stringify(newVal))
+}, { deep: true })
+
+function clearHistory() {
+  messages.value = []
+  localStorage.removeItem('chat_history')
+  message.success('历史记录已清除')
+}
 const settings = reactive({
   provider: localStorage.getItem('ai_provider') || 'siliconflow',
   name: localStorage.getItem('ai_name') || '',
@@ -152,20 +195,22 @@ const providerOptions = [
   { label: 'DeepSeek', value: 'deepseek' },
   { label: '通义千问 (Qwen)', value: 'qwen' },
   { label: '智谱 AI', value: 'zhipu' },
-  { label: '本地 (Local / Ollama)', value: 'custom', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama' },
+  { label: '本地 (Local / Ollama)', value: 'local_ollama', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama' },
   { label: '自定义 (Custom)', value: 'custom' }
 ]
 
 const isCustomProvider = computed(() => {
-  return settings.provider === 'custom' || !providerOptions.find(p => p.value === settings.provider)
+  return ['custom', 'local_ollama'].includes(settings.provider) || !providerOptions.find(p => p.value === settings.provider)
 })
 
+/* 移除旧的 messages 监听，上面已经通过 watch 实现了 */
+/* import { watch } from 'vue' */
+/* watch(() => settings.provider, ... */
 // 监听提供商变化，自动填充默认值
-import { watch } from 'vue'
 watch(() => settings.provider, (newVal) => {
-  const option = providerOptions.find(o => o.label.includes('Local') && newVal === 'custom')
+  const option = providerOptions.find(o => o.value === newVal)
   // 如果是切换到 Local 且当前 baseUrl 为空，则预填
-  if (option && !settings.baseUrl) {
+  if (option && option.baseUrl && !settings.baseUrl) {
     settings.baseUrl = option.baseUrl
     settings.apiKey = option.apiKey
   }
@@ -187,33 +232,32 @@ function saveSettings() {
 async function testConnection() {
   testing.value = true
   try {
-    const res = await api.post('/agent/llm/test', {
-      provider: settings.provider,
-      api_key: settings.apiKey,
-      base_url: settings.baseUrl,
-      model: settings.model
-    })
+    const res = await apiTestConnection(
+      settings.provider,
+      settings.apiKey,
+      settings.model,
+      settings.baseUrl
+    )
     
-    if (res.success) {
-      message.success(`连接成功！AI 回复: ${res.reply}`)
+    // apiTestConnection 返回的是 axios response.data，但经过拦截器处理
+    // 注意：后端返回的是 { success: boolean, ... }
+    const data = res.data || res
+
+    if (data.success) {
+      message.success(`连接成功！AI 回复: ${data.reply}`)
     } else {
-      message.error(`连接失败: ${res.message}`)
+      message.error(`连接失败: ${data.message}`)
     }
   } catch (e) {
+    console.error(e)
     message.error('连接测试请求失败')
   } finally {
     testing.value = false
   }
 }
 
-// 初始化消息
-const messages = ref([
-  {
-    role: 'assistant',
-    content: '你好！我是 RoleFit Pro AI 助手 🤖\n\n我已经升级为智能 Agent 模式。你可以直接用自然语言让我帮你：\n\n- "帮我看看现在有哪些在线的设备"\n- "查询最近失败的测试任务"\n- "有没有 RTX 4090 的机器？"\n- "查看 PC-001 的性能状态"\n\n请试着告诉我你想做什么！',
-    timestamp: new Date().toISOString()
-  }
-])
+// 移除旧的 messages 初始化代码，因为上面已经声明了
+// const messages = ref([ ... ])
 
 // 配置 marked
 marked.setOptions({
@@ -320,6 +364,40 @@ async function sendMessage() {
   gap: 8px;
   font-weight: 600;
   color: #333;
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #666;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.sub-text {
+  font-size: 12px;
+  color: #999;
+}
+
+.input-actions {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
 }
 
 .chat-messages {

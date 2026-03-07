@@ -113,14 +113,23 @@ class LLMProvider:
         初始化 LLM 提供商
         
         Args:
-            provider: 提供商名称 (siliconflow/minimax/deepseek/zhipu/qwen/openai/nvidia)
+            provider: 提供商名称 (siliconflow/minimax/deepseek/zhipu/qwen/openai/nvidia/custom/local_ollama)
             api_key: API Key，如果不提供则使用配置中的默认 Key
         """
         self.provider = provider
         
-        # 允许自定义提供商
+        # 允许自定义提供商和本地 Ollama
         if provider not in self.PROVIDERS:
-            if provider == "custom":
+            if provider == "local_ollama":
+                # 本地 Ollama 默认配置
+                provider_config = {
+                    "name": "Local Ollama",
+                    "base_url": "http://localhost:11434/v1", 
+                    "default_model": "llama3",
+                    "free": True,
+                    "models": []
+                }
+            elif provider == "custom":
                 # 自定义提供商默认配置
                 provider_config = {
                     "name": "Custom",
@@ -130,8 +139,7 @@ class LLMProvider:
                     "models": []
                 }
             else:
-                # 尝试作为自定义处理，或者抛出异常
-                # 这里我们宽容处理，假设是 custom
+                # 尝试作为自定义处理
                 provider_config = {
                     "name": provider,
                     "base_url": "",

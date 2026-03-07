@@ -56,13 +56,23 @@ export const aiApi = {
     api.get<AIAnalysisReport>(`/ai/reports/${id}`),
 
   // Agent Chat (Function Calling)
-  agentChat: (message: string, history?: any[], provider?: string, apiKey?: string, model?: string) =>
+  agentChat: (message: string, history?: any[], provider?: string, apiKey?: string, model?: string, baseUrl?: string) =>
     api.post('/agent/llm/agent/chat', { 
       message, 
       history,
       provider,
       api_key: apiKey,
-      model
+      model,
+      base_url: baseUrl
+    }),
+
+  // Test LLM Connection
+  testConnection: (provider: string, apiKey?: string, model?: string, baseUrl?: string) =>
+    api.post('/agent/llm/test', {
+      provider,
+      api_key: apiKey,
+      model,
+      base_url: baseUrl
     })
 }
 
@@ -71,3 +81,4 @@ export const aiAnalyze = aiApi.analyze
 export const aiAnalyzeMetrics = aiApi.analyzeMetrics
 export const aiGetReports = aiApi.getReports
 export const agentChat = aiApi.agentChat
+export const testConnection = aiApi.testConnection

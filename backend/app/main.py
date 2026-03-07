@@ -68,7 +68,7 @@ app.include_router(positions_router.router, prefix="/api", tags=["Positions"])
 app.include_router(software_router.router, prefix="/api", tags=["Software"])
 app.include_router(scripts_router.router, prefix="/api", tags=["Scripts"])
 app.include_router(executions_router.router, prefix="/api", tags=["Executions"])
-app.include_router(agent_router.router, prefix="/api", tags=["Agent"])  # Modified prefix to avoid conflict
+app.include_router(agent_router.router, prefix="/api/agent", tags=["Agent"])  # Modified prefix to avoid conflict
 app.include_router(alarms_router.router, prefix="/api", tags=["Alarms"])
 app.include_router(feature_cards_router.router, prefix="/api", tags=["Feature Cards"])
 app.include_router(database_router.router, prefix="/api", tags=["Database"])
