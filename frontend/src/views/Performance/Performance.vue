@@ -485,7 +485,7 @@ const refreshCharts = async () => {
       const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
       const cpuData = data.metrics.map((m: any) => m.cpu_percent || 0)
       const gpuData = data.metrics.map((m: any) => m.gpu_percent || 0)
-      gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_vram_used || 0) / 1024) // Convert MB to GB
+      gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0) / 1024) // Convert MB to GB
       
       cpuChart.setOption({
         xAxis: { data: timestamps },
