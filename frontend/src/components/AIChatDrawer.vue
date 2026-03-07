@@ -75,8 +75,22 @@
     <n-modal v-model:show="showSettings" preset="card" title="AI 设置" style="width: 400px">
       <n-form label-placement="left" label-width="80">
         <n-form-item label="提供商">
-          <n-select v-model:value="settings.provider" :options="providerOptions" />
+          <n-select 
+            v-model:value="settings.provider" 
+            :options="providerOptions" 
+            filterable 
+            tag 
+            placeholder="选择或输入自定义提供商"
+          />
         </n-form-item>
+        
+        <!-- 自定义提供商配置 -->
+        <template v-if="isCustomProvider">
+          <n-form-item label="Base URL">
+            <n-input v-model:value="settings.baseUrl" placeholder="如: https://api.example.com/v1" />
+          </n-form-item>
+        </template>
+
         <n-form-item label="API Key">
           <n-input 
             v-model:value="settings.apiKey" 
@@ -100,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, reactive } from 'vue'
+import { ref, nextTick, onMounted, reactive, computed } from 'vue'
 import { NButton, NIcon, NInput, NModal, NForm, NFormItem, NSelect, useMessage } from 'naive-ui'
 import { 
   Send as SendIcon,
@@ -122,6 +136,7 @@ const showSettings = ref(false)
 // Settings
 const settings = reactive({
   provider: localStorage.getItem('ai_provider') || 'siliconflow',
+  baseUrl: localStorage.getItem('ai_base_url') || '',
   apiKey: localStorage.getItem('ai_api_key') || '',
   model: localStorage.getItem('ai_model') || ''
 })
@@ -131,11 +146,17 @@ const providerOptions = [
   { label: 'OpenAI', value: 'openai' },
   { label: 'DeepSeek', value: 'deepseek' },
   { label: '通义千问 (Qwen)', value: 'qwen' },
-  { label: '智谱 AI', value: 'zhipu' }
+  { label: '智谱 AI', value: 'zhipu' },
+  { label: '自定义 (Custom)', value: 'custom' }
 ]
+
+const isCustomProvider = computed(() => {
+  return settings.provider === 'custom' || !providerOptions.find(p => p.value === settings.provider)
+})
 
 function saveSettings() {
   localStorage.setItem('ai_provider', settings.provider)
+  localStorage.setItem('ai_base_url', settings.baseUrl)
   localStorage.setItem('ai_api_key', settings.apiKey)
   localStorage.setItem('ai_model', settings.model)
   showSettings.value = false
@@ -218,7 +239,8 @@ async function sendMessage() {
       history, 
       settings.provider, 
       settings.apiKey, 
-      settings.model
+      settings.model,
+      settings.baseUrl // 新增参数
     )
     
     if (res && res.content) {

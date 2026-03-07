@@ -6,8 +6,8 @@ from sqlalchemy import select, desc
 
 from app.models.sqlite import Device, TestTask, TestResult, TestSoftware, JobScript
 from app.schemas.device import DeviceResponse
-from app.schemas.task import TaskResponse
-from app.schemas.result import ResultResponse
+from app.schemas.task import TestTaskResponse as TaskResponse
+from app.schemas.result import TestResultResponse as ResultResponse
 
 def get_devices(db: Session, status: Optional[str] = None, gpu_model: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
     """

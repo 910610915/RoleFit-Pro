@@ -85,7 +85,7 @@
             </n-layout>
             
             <!-- Floating AI Chat Button (Chrome extension style) -->
-            <div class="ai-float-btn" @click="showAiDrawer = true" title="AI 助手">
+            <div class="ai-float-btn" @click="showAiDrawer = true" title="AI 助手" v-if="!showAiDrawer">
               <n-icon size="28">
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <!-- 背景光晕 -->
