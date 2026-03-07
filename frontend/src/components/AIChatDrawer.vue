@@ -21,12 +21,8 @@
         :class="['message', msg.role]"
       >
         <div class="message-avatar">
-          <n-icon v-if="msg.role === 'assistant'" size="20">
-            <BotIcon />
-          </n-icon>
-          <n-icon v-else size="20">
-            <UserIcon />
-          </n-icon>
+          <img v-if="msg.role === 'assistant'" src="https://api.dicebear.com/7.x/bottts/svg?seed=RoleFitAI" alt="AI" />
+          <img v-else src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
         </div>
         <div class="message-content">
           <!-- 使用 marked 渲染 Markdown -->
@@ -38,7 +34,7 @@
       <!-- 加载状态 -->
       <div v-if="loading" class="message assistant">
         <div class="message-avatar">
-          <n-icon size="20"><BotIcon /></n-icon>
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=RoleFitAI" alt="AI" />
         </div>
         <div class="message-content">
           <div class="loading-dots">
@@ -86,8 +82,11 @@
         
         <!-- 自定义提供商配置 -->
         <template v-if="isCustomProvider">
+          <n-form-item label="名称">
+            <n-input v-model:value="settings.name" placeholder="自定义显示名称 (可选)" />
+          </n-form-item>
           <n-form-item label="Base URL">
-            <n-input v-model:value="settings.baseUrl" placeholder="如: https://api.example.com/v1" />
+            <n-input v-model:value="settings.baseUrl" placeholder="如: http://localhost:11434/v1" />
           </n-form-item>
         </template>
 
@@ -104,9 +103,12 @@
         </n-form-item>
       </n-form>
       <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <n-button @click="showSettings = false">取消</n-button>
-          <n-button type="primary" @click="saveSettings">保存</n-button>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <n-button @click="testConnection" :loading="testing" secondary type="info">测试连接</n-button>
+          <div style="display: flex; gap: 8px;">
+            <n-button @click="showSettings = false">取消</n-button>
+            <n-button type="primary" @click="saveSettings">保存</n-button>
+          </div>
         </div>
       </template>
     </n-modal>
@@ -123,6 +125,7 @@ import {
   SettingsOutline as SettingsIcon
 } from '@vicons/ionicons5'
 import { marked } from 'marked'
+import api from '@/api'
 
 // API
 import { agentChat } from '@/api/ai'
@@ -132,10 +135,12 @@ const inputText = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
 const showSettings = ref(false)
+const testing = ref(false)
 
 // Settings
 const settings = reactive({
   provider: localStorage.getItem('ai_provider') || 'siliconflow',
+  name: localStorage.getItem('ai_name') || '',
   baseUrl: localStorage.getItem('ai_base_url') || '',
   apiKey: localStorage.getItem('ai_api_key') || '',
   model: localStorage.getItem('ai_model') || ''
@@ -147,6 +152,7 @@ const providerOptions = [
   { label: 'DeepSeek', value: 'deepseek' },
   { label: '通义千问 (Qwen)', value: 'qwen' },
   { label: '智谱 AI', value: 'zhipu' },
+  { label: '本地 (Local / Ollama)', value: 'custom', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama' },
   { label: '自定义 (Custom)', value: 'custom' }
 ]
 
@@ -154,16 +160,50 @@ const isCustomProvider = computed(() => {
   return settings.provider === 'custom' || !providerOptions.find(p => p.value === settings.provider)
 })
 
+// 监听提供商变化，自动填充默认值
+import { watch } from 'vue'
+watch(() => settings.provider, (newVal) => {
+  const option = providerOptions.find(o => o.label.includes('Local') && newVal === 'custom')
+  // 如果是切换到 Local 且当前 baseUrl 为空，则预填
+  if (option && !settings.baseUrl) {
+    settings.baseUrl = option.baseUrl
+    settings.apiKey = option.apiKey
+  }
+})
+
 function saveSettings() {
   localStorage.setItem('ai_provider', settings.provider)
+  localStorage.setItem('ai_name', settings.name)
   localStorage.setItem('ai_base_url', settings.baseUrl)
   localStorage.setItem('ai_api_key', settings.apiKey)
   localStorage.setItem('ai_model', settings.model)
   showSettings.value = false
   message.success('设置已保存')
   
-  // Add system message
-  addMessage(`配置已更新！\n- 提供商: ${settings.provider}\n- 模型: ${settings.model || '默认'}`)
+  const providerName = settings.name || settings.provider
+  addMessage(`配置已更新！\n- 提供商: ${providerName}\n- 模型: ${settings.model || '默认'}`)
+}
+
+async function testConnection() {
+  testing.value = true
+  try {
+    const res = await api.post('/agent/llm/test', {
+      provider: settings.provider,
+      api_key: settings.apiKey,
+      base_url: settings.baseUrl,
+      model: settings.model
+    })
+    
+    if (res.success) {
+      message.success(`连接成功！AI 回复: ${res.reply}`)
+    } else {
+      message.error(`连接失败: ${res.message}`)
+    }
+  } catch (e) {
+    message.error('连接测试请求失败')
+  } finally {
+    testing.value = false
+  }
 }
 
 // 初始化消息
@@ -312,20 +352,15 @@ async function sendMessage() {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden; /* Ensure img fits circle */
   flex-shrink: 0;
+  background: #f0f0f0; /* Fallback */
 }
 
-.message.user .message-avatar {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: #fff;
-}
-
-.message.assistant .message-avatar {
-  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
-  color: #fff;
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .message-content {

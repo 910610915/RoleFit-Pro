@@ -55,6 +55,50 @@ async def agent_chat(
     return service.chat(message, history)
 
 
+@router.post("/llm/test", response_model=dict)
+async def test_llm_connection(
+    provider: str = Body(..., embed=True),
+    api_key: Optional[str] = Body(None, embed=True),
+    base_url: Optional[str] = Body(None, embed=True),
+    model: Optional[str] = Body(None, embed=True),
+    db: Session = Depends(get_db_sync)
+):
+    """
+    测试 LLM 连接
+    """
+    try:
+        from app.services.llm_service import LLMProvider
+        
+        # 初始化 Provider
+        # 注意：这里我们手动初始化，不经过 AgentService，以便更灵活控制
+        llm = LLMProvider(provider=provider, api_key=api_key)
+        
+        # 如果是自定义 base_url (针对 Custom 或 Local)
+        if base_url:
+            llm.client.base_url = base_url
+            
+        target_model = model or llm.default_model
+        
+        # 发送一个简单的 Ping 消息
+        response = llm.client.chat.completions.create(
+            model=target_model,
+            messages=[{"role": "user", "content": "Hello, are you online? Answer with 'Yes' only."}],
+            max_tokens=10
+        )
+        
+        return {
+            "success": True,
+            "message": "Connection successful",
+            "model": response.model,
+            "reply": response.choices[0].message.content
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+
 # ==================== 设备相关 ====================
 
 
