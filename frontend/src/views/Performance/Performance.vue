@@ -110,8 +110,8 @@
         />
       </div>
 
-      <!-- AI Analysis -->
-      <div class="analysis-card">
+      <!-- AI Analysis (Legacy - Removing) -->
+      <!-- <div class="analysis-card">
         <div class="card-header">
           <h3>AI 智能分析</h3>
           <n-button size="small" type="primary" @click="runAIAnalysis" :loading="aiLoading">
@@ -131,15 +131,12 @@
               </div>
             </div>
             <div v-else class="analysis-empty">
-              <n-empty description="点击一键分析获取AI分析结果">
-                <template #extra>
-                  <n-button type="primary" @click="runAIAnalysis">开始分析</n-button>
-                </template>
+              <n-empty description="请使用右下角的 AI 助手进行交互分析">
               </n-empty>
             </div>
           </n-spin>
         </div>
-      </div>
+      </div> -->
     </section>
 
     <!-- Alerts -->
