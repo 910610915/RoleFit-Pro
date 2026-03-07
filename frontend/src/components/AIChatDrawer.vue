@@ -71,17 +71,7 @@ import {
 import { marked } from 'marked'
 
 // API
-import { 
-  getDevices, 
-  getDeviceStatus,
-  getPerformanceMetrics,
-  getTasks
-} from '@/api/devices'
-import { aiAnalyze } from '@/api/ai'
-import { softwareApi } from '@/api/software'
-import { scriptApi } from '@/api/scripts'
-import { resultApi } from '@/api/results'
-import { statsApi } from '@/api/stats'
+import { agentChat } from '@/api/ai'
 
 const inputText = ref('')
 const loading = ref(false)
@@ -91,7 +81,7 @@ const messagesContainer = ref(null)
 const messages = ref([
   {
     role: 'assistant',
-    content: '你好！我是 RoleFit Pro AI 助手 🤖\n\n我可以帮你：\n- 查询设备列表和状态\n- 查看性能监控数据\n- 查询测试结果和统计\n\n直接问我问题吧！',
+    content: '你好！我是 RoleFit Pro AI 助手 🤖\n\n我已经升级为智能 Agent 模式。你可以直接用自然语言让我帮你：\n\n- "帮我看看现在有哪些在线的设备"\n- "查询最近失败的测试任务"\n- "有没有 RTX 4090 的机器？"\n- "查看 PC-001 的性能状态"\n\n请试着告诉我你想做什么！',
     timestamp: new Date().toISOString()
   }
 ])
@@ -144,369 +134,33 @@ async function sendMessage() {
   loading.value = true
   
   try {
-    // 处理意图
-    const handled = await handleIntent(text)
-    if (!handled) {
-      // 使用 AI 分析
-      await aiAnalyzeMessage(text)
+    // 构造历史消息上下文 (排除 loading 状态的消息)
+    // 只保留最近 10 条，避免 token 过长
+    const history = messages.value
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-10)
+      .map(m => ({
+        role: m.role,
+        content: m.content
+      }))
+      
+    // 调用后端 Agent
+    const res = await agentChat(text, history)
+    
+    if (res && res.content) {
+      addMessage(res.content)
+    } else {
+      addMessage('🤔 AI 似乎没有返回内容，请稍后再试。')
     }
+
   } catch (error) {
     console.error('Error:', error)
-    addMessage('❌ 处理出错: ' + error.message)
+    addMessage('❌ 处理出错: ' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
 }
-
-async function handleIntent(text) {
-  const lower = text.toLowerCase()
-  
-  // 关于AI模型
-  if (lower.includes('什么') && (lower.includes('模型') || lower.includes('大模型'))) {
-    addMessage('我使用的是 **NVIDIA Llama 3.1** 大模型 (meta/llama-3.1-8b-instruct)。')
-    return true
-  }
-  
-  // 设备列表 - 直接API查询 + Markdown表格
-  if (lower.includes('设备') && (lower.includes('列表') || lower.includes('所有') || lower.includes('列') || lower.includes('显示'))) {
-    await listDevicesMarkdown()
-    return true
-  }
-  
-  // 设备状态
-  if (lower.includes('设备') && (lower.includes('状态') || lower.includes('在线'))) {
-    await queryDeviceStatus()
-    return true
-  }
-  
-  // 性能
-  if (lower.includes('性能') || lower.includes('监控')) {
-    await viewPerformance()
-    return true
-  }
-  
-  // 任务
-  if ((lower.includes('任务') || lower.includes('测试')) && (lower.includes('列表') || lower.includes('查看'))) {
-    await listTasks()
-    return true
-  }
-  
-  // 软件
-  if (lower.includes('软件') && (lower.includes('列表') || lower.includes('所有'))) {
-    await listSoftware()
-    return true
-  }
-  
-  // 脚本
-  if (lower.includes('脚本')) {
-    await listScripts()
-    return true
-  }
-  
-  // 结果
-  if (lower.includes('结果') || lower.includes('分数')) {
-    await listResults()
-    return true
-  }
-  
-  // 统计
-  if (lower.includes('统计') || lower.includes('仪表盘') || lower.includes('概览')) {
-    await viewStats()
-    return true
-  }
-  
-  // 创建任务
-  if (lower.includes('创建') && lower.includes('任务')) {
-    addMessage('好的，请告诉我：\n1. 要测试哪个设备？\n2. 需要做什么测试？')
-    return true
-  }
-  
-  // 帮助
-  if (lower.includes('帮助') || lower === '?') {
-    showHelp()
-    return true
-  }
-  
-  return false
-}
-
-// 设备列表 - Markdown表格格式
-async function listDevicesMarkdown() {
-  try {
-    addMessage('🔍 正在查询设备列表...')
-    
-    const res = await getDevices({ page_size: 20 })
-    const devices = res.items || res || []
-    
-    if (!devices.length) {
-      addMessage('暂未发现任何设备。')
-      return
-    }
-    
-    // 生成 Markdown 表格
-    let md = '| 设备名称 | 状态 | CPU | GPU |\n'
-    md += '| --- | --- | --- | --- |\n'
-    
-    devices.forEach(d => {
-      const status = d.status === 'online' ? '🟢 在线' : '🔴 离线'
-      const cpu = d.cpu_model ? d.cpu_model.substring(0, 20) : '未知'
-      const gpu = d.gpu_model ? d.gpu_model.substring(0, 20) : '未知'
-      md += `| ${d.device_name} | ${status} | ${cpu} | ${gpu} |\n`
-    })
-    
-    addMessage(`📊 **设备列表** (共 ${devices.length} 台)\n\n${md}`)
-  } catch (e) {
-    console.error('List devices error:', e)
-    addMessage('❌ 获取设备列表失败: ' + e.message)
-  }
-}
-
-async function queryDeviceStatus() {
-  try {
-    addMessage('🔍 正在查询设备状态...')
-    
-    const res = await getDevices({ page_size: 5 })
-    const devices = res.items || res || []
-    
-    if (!devices.length) {
-      addMessage('暂未发现任何设备。')
-      return
-    }
-    
-    let md = '| 设备 | 状态 | CPU | GPU | 内存 |\n'
-    md += '| --- | --- | --- | --- | --- |\n'
-    
-    for (const device of devices) {
-      try {
-        const status = await getDeviceStatus(device.id)
-        const isOnline = status?.latest_metric ? '🟢' : '🔴'
-        const cpu = status?.latest_metric?.cpu_percent?.toFixed(1) + '%' || '-'
-        const gpu = status?.latest_metric?.gpu_percent?.toFixed(1) + '%' || '-'
-        const mem = status?.latest_metric?.memory_percent?.toFixed(1) + '%' || '-'
-        md += `| ${device.device_name} | ${isOnline} | ${cpu} | ${gpu} | ${mem} |\n`
-      } catch {
-        md += `| ${device.device_name} | ❌ | - | - | - |\n`
-      }
-    }
-    
-    addMessage(`📱 **设备状态**\n\n${md}`)
-  } catch (e) {
-    console.error('Status error:', e)
-    addMessage('❌ 获取设备状态失败: ' + e.message)
-  }
-}
-
-async function viewPerformance() {
-  try {
-    addMessage('🔍 正在查询性能数据...')
-    
-    const res = await getDevices({ page_size: 3 })
-    const devices = res.items || res || []
-    
-    if (!devices.length) {
-      addMessage('暂未发现任何设备。')
-      return
-    }
-    
-    let md = '| 设备 | CPU | GPU | 内存 |\n'
-    md += '| --- | --- | --- | --- |\n'
-    
-    for (const device of devices) {
-      try {
-        const metrics = await getPerformanceMetrics(device.id, { limit: 1 })
-        const data = metrics.items?.[0] || metrics?.[0]
-        
-        if (data) {
-          const cpu = data.cpu_percent?.toFixed(1) + '%' || '-'
-          const gpu = data.gpu_percent?.toFixed(1) + '%' || '-'
-          const mem = data.memory_percent?.toFixed(1) + '%' || '-'
-          md += `| ${device.device_name} | ${cpu} | ${gpu} | ${mem} |\n`
-        } else {
-          md += `| ${device.device_name} | 无数据 | 无数据 | 无数据 |\n`
-        }
-      } catch {
-        md += `| ${device.device_name} | 查询失败 | 查询失败 | 查询失败 |\n`
-      }
-    }
-    
-    addMessage(`📈 **实时性能**\n\n${md}`)
-  } catch (e) {
-    console.error('Performance error:', e)
-    addMessage('❌ 获取性能数据失败: ' + e.message)
-  }
-}
-
-async function listTasks() {
-  try {
-    const res = await getTasks({ page_size: 10 })
-    const tasks = res.items || res || []
-    
-    if (!tasks.length) {
-      addMessage('暂无测试任务。')
-      return
-    }
-    
-    let md = '| 任务名 | 类型 | 状态 | 创建时间 |\n'
-    md += '| --- | --- | --- | --- |\n'
-    
-    tasks.forEach(t => {
-      const status = t.task_status === 'completed' ? '✅' : t.task_status === 'running' ? '🔄' : '⏳'
-      const time = new Date(t.created_at).toLocaleDateString('zh-CN')
-      md += `| ${t.task_name} | ${t.task_type || '-'} | ${status} | ${time} |\n`
-    })
-    
-    addMessage(`📋 **测试任务** (${tasks.length}个)\n\n${md}`)
-  } catch (e) {
-    addMessage('❌ 获取任务列表失败: ' + e.message)
-  }
-}
-
-async function listSoftware() {
-  try {
-    const res = await softwareApi.list({ page_size: 10 })
-    const software = res.items || res || []
-    
-    if (!software.length) {
-      addMessage('暂未添加任何软件。')
-      return
-    }
-    
-    let md = '| 软件名 | 类别 | 版本 | 状态 |\n'
-    md += '| --- | --- | --- | --- |\n'
-    
-    software.forEach(s => {
-      const status = s.is_active ? '✅' : '❌'
-      md += `| ${s.software_name} | ${s.category || '-'} | ${s.version || '-'} | ${status} |\n`
-    })
-    
-    addMessage(`💻 **软件列表** (${software.length}个)\n\n${md}`)
-  } catch (e) {
-    addMessage('❌ 获取软件列表失败: ' + e.message)
-  }
-}
-
-async function listScripts() {
-  try {
-    const res = await scriptApi.list({ page_size: 10 })
-    const scripts = res.items || res || []
-    
-    if (!scripts.length) {
-      addMessage('暂未添加任何测试脚本。')
-      return
-    }
-    
-    let md = '| 脚本名 | 类型 | 预计时长 |\n'
-    md += '| --- | --- | --- |\n'
-    
-    scripts.forEach(s => {
-      md += `| ${s.script_name} | ${s.script_type || '标准'} | ${s.expected_duration}分钟 |\n`
-    })
-    
-    addMessage(`📜 **测试脚本** (${scripts.length}个)\n\n${md}`)
-  } catch (e) {
-    addMessage('❌ 获取脚本列表失败: ' + e.message)
-  }
-}
-
-async function listResults() {
-  try {
-    const res = await resultApi.list({ page_size: 10 })
-    const results = res.items || res || []
-    
-    if (!results.length) {
-      addMessage('暂无测试结果。')
-      return
-    }
-    
-    let md = '| 设备 | 测试类型 | 状态 | 得分 | 日期 |\n'
-    md += '| --- | --- | --- | --- | --- |\n'
-    
-    results.forEach(r => {
-      const status = r.test_status === 'passed' ? '✅' : r.test_status === 'failed' ? '❌' : '⏳'
-      const score = r.overall_score || '-'
-      const date = new Date(r.created_at).toLocaleDateString('zh-CN')
-      md += `| ${r.device_id} | ${r.test_type || '-'} | ${status} | ${score} | ${date} |\n`
-    })
-    
-    addMessage(`📊 **测试结果** (${results.length}条)\n\n${md}`)
-  } catch (e) {
-    addMessage('❌ 获取测试结果失败: ' + e.message)
-  }
-}
-
-async function viewStats() {
-  try {
-    const stats = await statsApi.getDashboard()
-    
-    const onlineRate = stats.total_devices > 0 
-      ? ((stats.online_devices / stats.total_devices) * 100).toFixed(1) 
-      : 0
-    const passRate = stats.total_tests > 0 
-      ? ((stats.passed_tests / stats.total_tests) * 100).toFixed(1) 
-      : 0
-    
-    const md = `
-| 指标 | 数值 |
-| --- | --- |
-| 🖥️ 总设备 | ${stats.total_devices} |
-| 🟢 在线 | ${stats.online_devices} (${onlineRate}%) |
-| 📋 总任务 | ${stats.total_tasks} |
-| ✅ 已完成 | ${stats.completed_tasks} |
-| 🧪 总测试 | ${stats.total_tests} |
-| ✅ 通过 | ${stats.passed_tests} (${passRate}%) |
-| 📊 平均分 | ${stats.average_score?.toFixed(1) || 0} |
-`
-    
-    addMessage(`📈 **系统概览**\n\n${md}`)
-  } catch (e) {
-    addMessage('❌ 获取统计数据失败: ' + e.message)
-  }
-}
-
-function showHelp() {
-  addMessage(`🤖 **可用命令**：
-
-| 功能 | 命令示例 |
-| --- | --- |
-| 设备列表 | "查看设备列表" |
-| 设备状态 | "查看设备状态" |
-| 性能监控 | "查看性能" |
-| 任务列表 | "查看任务" |
-| 软件列表 | "查看软件" |
-| 测试结果 | "查看测试结果" |
-| 系统统计 | "查看统计" |
-
-💬 也可以直接问我任何问题！`)
-}
-
-async function aiAnalyzeMessage(text) {
-  try {
-    addMessage('🤔 AI 正在思考...')
-    
-    const result = await aiAnalyze({
-      query: text,
-      analysis_type: 'general'
-    })
-    
-    // 移除"正在思考"消息
-    messages.value.pop()
-    
-    if (result?.summary) {
-      addMessage(result.summary)
-    } else if (result?.detail) {
-      addMessage('❌ AI 返回错误: ' + result.detail)
-    } else {
-      addMessage('抱歉，我暂时无法回答。你可以尝试：\n- 查看设备列表\n- 查看设备状态')
-    }
-  } catch (e) {
-    // 移除"正在思考"消息
-    if (messages.value.length > 0 && messages.value[messages.value.length - 1].content.includes('思考')) {
-      messages.value.pop()
-    }
-    console.error('AI error:', e)
-    addMessage('❌ AI 分析失败: ' + e.message)
-  }
-}
+</script>
 </script>
 
 <style scoped>

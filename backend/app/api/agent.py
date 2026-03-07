@@ -3,9 +3,9 @@ Agent API - 用于Agent获取任务和上报结果
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import uuid
 
@@ -20,8 +20,26 @@ from app.models.sqlite import (
 )
 from app.schemas.script import ScriptResponse
 from app.schemas.execution import ExecutionCreate, ExecutionResponse
+from app.services.agent_service import AgentService
 
 router = APIRouter(tags=["Agent"])
+
+# ==================== LLM Agent ====================
+
+@router.post("/llm/agent/chat")
+async def agent_chat(
+    message: str = Body(..., embed=True),
+    history: Optional[List[Dict[str, str]]] = Body(None, embed=True),
+    provider: Optional[str] = Body(None, embed=True),
+    db: Session = Depends(get_db_sync)
+):
+    """
+    Agent 聊天接口 (支持 Function Calling)
+    
+    接收用户消息，自动调用工具查询数据，并返回 AI 回复。
+    """
+    service = AgentService(db, provider=provider)
+    return service.chat(message, history)
 
 
 # ==================== 设备相关 ====================

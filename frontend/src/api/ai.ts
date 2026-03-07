@@ -53,10 +53,15 @@ export const aiApi = {
     
   // Get single report
   getReport: (id: string) =>
-    api.get<AIAnalysisReport>(`/ai/reports/${id}`)
+    api.get<AIAnalysisReport>(`/ai/reports/${id}`),
+
+  // Agent Chat (Function Calling)
+  agentChat: (message: string, history?: any[]) =>
+    api.post('/agent/llm/agent/chat', { message, history })
 }
 
 // 兼容导出
 export const aiAnalyze = aiApi.analyze
 export const aiAnalyzeMetrics = aiApi.analyzeMetrics
 export const aiGetReports = aiApi.getReports
+export const agentChat = aiApi.agentChat
