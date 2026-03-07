@@ -1,9 +1,9 @@
 <template>
   <div class="task-create">
-    <n-button @click="router.back()" class="back-btn">
-      <template #icon><n-icon><arrow-back /></n-icon></template>
+    <RainbowButton @click="router.back()" class="back-btn">
+      <n-icon><arrow-back /></n-icon>
       返回
-    </n-button>
+    </RainbowButton>
     
     <n-card title="创建测试任务">
       <n-form ref="formRef" :model="form" :rules="rules" label-placement="left">
@@ -60,8 +60,8 @@
         
         <n-form-item>
           <n-space>
-            <n-button type="primary" @click="handleSubmit" :loading="saving">创建</n-button>
-            <n-button @click="router.back()">取消</n-button>
+            <RainbowButton @click="handleSubmit" :disabled="saving">创建</RainbowButton>
+            <RainbowButton @click="router.back()">取消</RainbowButton>
           </n-space>
         </n-form-item>
       </n-form>
@@ -76,6 +76,7 @@ import { NCard, NButton, NForm, NFormItem, NInput, NSelect, NRadioGroup, NRadio,
 import { ArrowBack } from '@vicons/ionicons5'
 import { taskApi, type TaskCreate } from '@/api/tasks'
 import { deviceApi, type Device } from '@/api/devices'
+import RainbowButton from '@/components/inspira/RainbowButton.vue'
 
 const router = useRouter()
 

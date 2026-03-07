@@ -12,6 +12,7 @@ from app.models.sqlite import (
     PositionStandard,
     ScriptExecution,
     SoftwareMetrics,
+    PerformanceMetric,
 )
 from app.schemas.result import (
     TestResultCreate,
@@ -217,6 +218,55 @@ async def get_result(result_id: str, db: AsyncSession = Depends(get_db_sync)):
         )
 
     return test_result
+
+
+@router.get("/{result_id}/metrics")
+async def get_result_metrics(
+    result_id: str,
+    db: AsyncSession = Depends(get_db_sync),
+):
+    """Get performance metrics for a specific result"""
+    # Get the result first to find the device_id
+    result = await db.execute(select(TestResult).where(TestResult.id == result_id))
+    test_result = result.scalar_one_or_none()
+
+    if not test_result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Result not found"
+        )
+
+    # Get device_id from the result
+    device_id = test_result.device_id
+
+    # Get metrics for this device - get recent 100 records
+    query = (
+        select(PerformanceMetric)
+        .where(PerformanceMetric.device_id == device_id)
+        .order_by(PerformanceMetric.timestamp.desc())
+        .limit(100)
+    )
+
+    metrics_result = await db.execute(query)
+    metrics = metrics_result.scalars().all()
+
+    # Convert to list of dicts - use actual field names from database
+    metrics_list = []
+    for m in metrics:
+        metrics_list.append(
+            {
+                "time": m.timestamp.isoformat() if m.timestamp else None,
+                "cpuPercent": m.cpu_percent,
+                "cpuTemp": m.cpu_temperature,
+                "gpuPercent": m.gpu_percent,
+                "gpuTemp": m.gpu_temperature,
+                "memoryPercent": m.memory_percent,
+                "memoryMB": m.memory_used_mb,
+                "diskRead": m.disk_read_mbps if m.disk_read_mbps else 0,
+                "diskWrite": m.disk_write_mbps if m.disk_write_mbps else 0,
+            }
+        )
+
+    return metrics_list
 
 
 @router.put("/{result_id}", response_model=TestResultResponse)

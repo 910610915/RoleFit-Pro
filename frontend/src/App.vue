@@ -68,18 +68,14 @@
                       <span class="role">{{ currentUser?.role === 'admin' ? '管理员' : '普通用户' }}</span>
                     </div>
                   </div>
-                  <n-button 
+                  <RainbowButton 
                     class="logout-btn" 
-                    quaternary 
                     size="small"
-                    :collapsed-icon-size="20"
                     @click="handleLogout"
                   >
-                    <template #icon>
-                      <n-icon><LogOutOutline /></n-icon>
-                    </template>
+                    <n-icon><LogOutOutline /></n-icon>
                     <span v-if="!collapsed">退出登录</span>
-                  </n-button>
+                  </RainbowButton>
                 </div>
               </n-layout-sider>
                
@@ -142,6 +138,7 @@ import { zhCN, dateZhCN } from 'naive-ui'
 import AIChatDrawer from './components/AIChatDrawer.vue'
 import SleekLineCursor from './components/ui/sleek-line-cursor/SleekLineCursor.vue'
 import AuroraBackground from './components/ui/aurora-background/AuroraBackground.vue'
+import RainbowButton from './components/inspira/RainbowButton.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -382,11 +379,8 @@ body {
   width: 100%;
   justify-content: center;
   border-radius: 10px;
-  color: #ef4444;
-}
-
-.logout-btn:hover {
-  background: rgba(239, 68, 68, 0.08);
+  gap: 8px;
+  margin-top: 8px;
 }
 
 /* Legacy styles for compatibility */

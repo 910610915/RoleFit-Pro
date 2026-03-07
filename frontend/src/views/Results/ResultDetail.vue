@@ -1,14 +1,14 @@
 <template>
   <div class="result-detail">
-    <n-button @click="router.back()" class="back-btn">
-      <template #icon><n-icon><arrow-back /></n-icon></template>
+    <RainbowButton @click="router.back()" class="back-btn">
+      <n-icon><arrow-back /></n-icon>
       返回
-    </n-button>
+    </RainbowButton>
     <n-space class="action-buttons">
-      <n-button type="primary" @click="handleExport">
-        <template #icon><n-icon><download /></n-icon></template>
+      <RainbowButton @click="handleExport">
+        <n-icon><download /></n-icon>
         导出报告
-      </n-button>
+      </RainbowButton>
     </n-space>
     
     <n-spin :show="loading">
@@ -194,6 +194,7 @@ import { NButton, NCard, NGrid, NGi, NDescriptions, NDescriptionsItem, NTag, NIc
 import { ArrowBack, CheckmarkCircle, Download } from '@vicons/ionicons5'
 import * as echarts from 'echarts'
 import { resultApi, type TestResult } from '@/api/results'
+import RainbowButton from '@/components/inspira/RainbowButton.vue'
 
 const route = useRoute()
 const router = useRouter()

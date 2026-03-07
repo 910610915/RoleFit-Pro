@@ -8,8 +8,8 @@
       filterable
     />
     <template #footer>
-      <n-button @click="showModal = false">取消</n-button>
-      <n-button type="primary" @click="saveConfig">保存</n-button>
+      <RainbowButton @click="showModal = false">取消</RainbowButton>
+      <RainbowButton @click="saveConfig">保存</RainbowButton>
     </template>
   </n-modal>
 </template>
@@ -17,6 +17,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { NModal, NTransfer, NButton } from 'naive-ui'
+import RainbowButton from '@/components/inspira/RainbowButton.vue'
 
 const props = defineProps<{
   show: boolean

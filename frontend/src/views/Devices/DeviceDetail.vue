@@ -1,9 +1,9 @@
 <template>
   <div class="device-detail">
-    <n-button @click="router.back()" class="back-btn">
-      <template #icon><n-icon><arrow-back /></n-icon></template>
+    <RainbowButton @click="router.back()" class="back-btn">
+      <n-icon><arrow-back /></n-icon>
       返回
-    </n-button>
+    </RainbowButton>
     
     <n-spin :show="loading">
       <n-grid :cols="2" :x-gap="20" :y-gap="20">
@@ -138,6 +138,7 @@ import { NButton, NCard, NGrid, NGi, NDescriptions, NDescriptionsItem, NTag, NIc
 import { ArrowBack } from '@vicons/ionicons5'
 import { deviceApi, type Device } from '@/api/devices'
 import { resultApi } from '@/api/results'
+import RainbowButton from '@/components/inspira/RainbowButton.vue'
 
 const route = useRoute()
 const router = useRouter()
