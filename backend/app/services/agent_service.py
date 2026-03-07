@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 class AgentService:
     def __init__(self, db: Session, provider: str = "siliconflow"):
         self.db = db
-        self.llm = LLMProvider(provider=provider)
+        # 允许 provider 为空，LLMProvider 会处理默认值
+        self.llm = LLMProvider(provider=provider or "siliconflow")
         
     def chat(self, message: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """

@@ -56,8 +56,14 @@ export const aiApi = {
     api.get<AIAnalysisReport>(`/ai/reports/${id}`),
 
   // Agent Chat (Function Calling)
-  agentChat: (message: string, history?: any[]) =>
-    api.post('/agent/llm/agent/chat', { message, history })
+  agentChat: (message: string, history?: any[], provider?: string, apiKey?: string, model?: string) =>
+    api.post('/agent/llm/agent/chat', { 
+      message, 
+      history,
+      provider,
+      api_key: apiKey,
+      model
+    })
 }
 
 // 兼容导出

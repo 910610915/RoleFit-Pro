@@ -1,5 +1,18 @@
 <template>
   <div class="ai-chat-drawer">
+    <!-- Header with Settings -->
+    <div class="drawer-header">
+      <div class="header-title">
+        <n-icon size="20" color="#10b981"><BotIcon /></n-icon>
+        <span>RoleFit AI</span>
+      </div>
+      <n-button quaternary circle size="small" @click="showSettings = true">
+        <template #icon>
+          <n-icon><SettingsIcon /></n-icon>
+        </template>
+      </n-button>
+    </div>
+
     <!-- 聊天消息列表 -->
     <div class="chat-messages" ref="messagesContainer">
       <div
@@ -57,25 +70,80 @@
         </template>
       </n-button>
     </div>
+
+    <!-- Settings Modal -->
+    <n-modal v-model:show="showSettings" preset="card" title="AI 设置" style="width: 400px">
+      <n-form label-placement="left" label-width="80">
+        <n-form-item label="提供商">
+          <n-select v-model:value="settings.provider" :options="providerOptions" />
+        </n-form-item>
+        <n-form-item label="API Key">
+          <n-input 
+            v-model:value="settings.apiKey" 
+            type="password" 
+            show-password-on="click" 
+            placeholder="留空则使用系统默认"
+          />
+        </n-form-item>
+        <n-form-item label="模型">
+          <n-input v-model:value="settings.model" placeholder="如: Qwen/Qwen2.5-7B-Instruct" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <n-button @click="showSettings = false">取消</n-button>
+          <n-button type="primary" @click="saveSettings">保存</n-button>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
-import { NButton, NIcon, NInput } from 'naive-ui'
+import { ref, nextTick, onMounted, reactive } from 'vue'
+import { NButton, NIcon, NInput, NModal, NForm, NFormItem, NSelect, useMessage } from 'naive-ui'
 import { 
   Send as SendIcon,
   PersonCircle as UserIcon,
-  HardwareChip as BotIcon
+  HardwareChip as BotIcon,
+  SettingsOutline as SettingsIcon
 } from '@vicons/ionicons5'
 import { marked } from 'marked'
 
 // API
 import { agentChat } from '@/api/ai'
 
+const message = useMessage()
 const inputText = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
+const showSettings = ref(false)
+
+// Settings
+const settings = reactive({
+  provider: localStorage.getItem('ai_provider') || 'siliconflow',
+  apiKey: localStorage.getItem('ai_api_key') || '',
+  model: localStorage.getItem('ai_model') || ''
+})
+
+const providerOptions = [
+  { label: '硅基流动 (SiliconFlow)', value: 'siliconflow' },
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'DeepSeek', value: 'deepseek' },
+  { label: '通义千问 (Qwen)', value: 'qwen' },
+  { label: '智谱 AI', value: 'zhipu' }
+]
+
+function saveSettings() {
+  localStorage.setItem('ai_provider', settings.provider)
+  localStorage.setItem('ai_api_key', settings.apiKey)
+  localStorage.setItem('ai_model', settings.model)
+  showSettings.value = false
+  message.success('设置已保存')
+  
+  // Add system message
+  addMessage(`配置已更新！\n- 提供商: ${settings.provider}\n- 模型: ${settings.model || '默认'}`)
+}
 
 // 初始化消息
 const messages = ref([
@@ -144,8 +212,14 @@ async function sendMessage() {
         content: m.content
       }))
       
-    // 调用后端 Agent
-    const res = await agentChat(text, history)
+    // 调用后端 Agent (带上配置)
+    const res = await agentChat(
+      text, 
+      history, 
+      settings.provider, 
+      settings.apiKey, 
+      settings.model
+    )
     
     if (res && res.content) {
       addMessage(res.content)
@@ -161,13 +235,29 @@ async function sendMessage() {
   }
 }
 </script>
-</script>
 
 <style scoped>
 .ai-chat-drawer {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #333;
 }
 
 .chat-messages {
@@ -179,6 +269,7 @@ async function sendMessage() {
   gap: 12px;
   background: #fafafa;
 }
+
 
 .message {
   display: flex;

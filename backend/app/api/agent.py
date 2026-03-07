@@ -31,14 +31,27 @@ async def agent_chat(
     message: str = Body(..., embed=True),
     history: Optional[List[Dict[str, str]]] = Body(None, embed=True),
     provider: Optional[str] = Body(None, embed=True),
+    api_key: Optional[str] = Body(None, embed=True),
+    model: Optional[str] = Body(None, embed=True),
     db: Session = Depends(get_db_sync)
 ):
     """
     Agent 聊天接口 (支持 Function Calling)
     
     接收用户消息，自动调用工具查询数据，并返回 AI 回复。
+    支持前端传递 provider/api_key/model 配置。
     """
     service = AgentService(db, provider=provider)
+    
+    # 如果前端传了 api_key 或 model，临时覆盖 service 中的配置
+    if api_key:
+        service.llm.api_key = api_key
+        # 重新初始化 client 以应用新的 key
+        service.llm.client.api_key = api_key
+        
+    if model:
+        service.llm.default_model = model
+        
     return service.chat(message, history)
 
 
@@ -46,7 +59,7 @@ async def agent_chat(
 
 
 @router.get("/devices/online")
-async def get_online_devices(db: AsyncSession = Depends(get_db_sync)):
+async def get_online_devices(db: Session = Depends(get_db_sync)):
     """获取在线设备列表"""
     # 5分钟内有心跳的设备视为在线
     cutoff = datetime.utcnow() - timedelta(minutes=5)
@@ -54,7 +67,7 @@ async def get_online_devices(db: AsyncSession = Depends(get_db_sync)):
     query = select(Device).where(
         and_(Device.status == "online", Device.last_seen_at >= cutoff)
     )
-    result = await db.execute(query)
+    result = db.execute(query)
     devices = result.scalars().all()
 
     return [
@@ -75,7 +88,7 @@ async def get_online_devices(db: AsyncSession = Depends(get_db_sync)):
 @router.get("/tasks/pending", response_model=List[dict])
 async def get_pending_tasks(
     device_id: str = Query(..., description="设备ID"),
-    db: AsyncSession = Depends(get_db_sync),
+    db: Session = Depends(get_db_sync),
 ):
     """
     获取设备待执行的任务
@@ -86,11 +99,11 @@ async def get_pending_tasks(
     # 查找分配给该设备的pending状态的任务
     # 或者分配给该部门/岗位的pending任务
     query = select(TestTask).where(TestTask.task_status == "pending")
-    result = await db.execute(query)
+    result = db.execute(query)
     tasks = result.scalars().all()
 
     # 检查设备是否在线
-    device_result = await db.execute(select(Device).where(Device.id == device_id))
+    device_result = db.execute(select(Device).where(Device.id == device_id))
     device = device_result.scalar_one_or_none()
 
     response = []
@@ -129,7 +142,7 @@ async def start_execution(
     script_id: str,
     device_id: str,
     task_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_db_sync),
+    db: Session = Depends(get_db_sync),
 ):
     """
     Agent 开始执行脚本时调用
@@ -143,8 +156,8 @@ async def start_execution(
         exit_code=-1,  # 初始值，表示未完成
     )
     db.add(execution)
-    await db.commit()
-    await db.refresh(execution)
+    db.commit()
+    db.refresh(execution)
 
     return {
         "execution_id": execution.id,
@@ -158,13 +171,13 @@ async def complete_execution(
     exit_code: int = Body(0),
     error_message: Optional[str] = Body(None),
     metrics_data: Optional[List[dict]] = Body(None),
-    db: AsyncSession = Depends(get_db_sync),
+    db: Session = Depends(get_db_sync),
 ):
     """
     Agent 完成脚本执行时调用
     更新执行记录和性能指标
     """
-    result = await db.execute(
+    result = db.execute(
         select(ScriptExecution).where(ScriptExecution.id == execution_id)
     )
     execution = result.scalar_one_or_none()
@@ -181,7 +194,7 @@ async def complete_execution(
             (execution.end_time - execution.start_time).total_seconds()
         )
 
-    await db.commit()
+    db.commit()
 
     # 保存性能指标数据
     if metrics_data:
@@ -202,7 +215,7 @@ async def complete_execution(
                 status="completed" if exit_code == 0 else "failed",
             )
             db.add(metric)
-        await db.commit()
+        db.commit()
 
     return {
         "execution_id": execution.id,
@@ -213,7 +226,7 @@ async def complete_execution(
 
 @router.post("/executions/{execution_id}/metrics", response_model=dict)
 async def submit_metrics(
-    execution_id: str, metrics: List[dict], db: AsyncSession = Depends(get_db_sync)
+    execution_id: str, metrics: List[dict], db: Session = Depends(get_db_sync)
 ):
     """
     Agent 实时上报性能指标
@@ -238,7 +251,7 @@ async def submit_metrics(
         )
         db.add(metric)
 
-    await db.commit()
+    db.commit()
 
     return {"success": True, "count": len(metrics)}
 
@@ -247,9 +260,9 @@ async def submit_metrics(
 
 
 @router.get("/scripts/{script_id}", response_model=ScriptResponse)
-async def get_script_detail(script_id: str, db: AsyncSession = Depends(get_db_sync)):
+async def get_script_detail(script_id: str, db: Session = Depends(get_db_sync)):
     """获取脚本详情"""
-    result = await db.execute(select(JobScript).where(JobScript.id == script_id))
+    result = db.execute(select(JobScript).where(JobScript.id == script_id))
     script = result.scalar_one_or_none()
 
     if not script:
