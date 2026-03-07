@@ -19,7 +19,6 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 - Python 3.10+ / FastAPI
 - SQLAlchemy (ORM)
 - SQLite (轻量级数据库)
-- WMI + psutil (硬件采集)
 
 ### 前端
 - Vue 3 + TypeScript
@@ -32,10 +31,11 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 - **Marked** Markdown 渲染
 - **Shadcn Vue** UI 组件
 
-### Agent
-- Python (Windows)
-- WMI + psutil
+### Agent (Windows 客户端)
+- **Node.js** - systeminformation 库 (硬件信息采集)
+- **Python** - 客户端核心逻辑
 - 自动注册和心跳
+- 实时性能监控上报
 
 ---
 

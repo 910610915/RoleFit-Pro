@@ -14,6 +14,15 @@ import threading
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
+# Try to import Node.js hardware wrapper (systeminformation)
+try:
+    from nodejs_hardware import get_realtime_metrics as get_realtime_metrics_nodejs
+
+    NODEJS_AVAILABLE = True
+except ImportError:
+    NODEJS_AVAILABLE = False
+    get_realtime_metrics_nodejs = None
+
 # Configuration
 SERVER_URL = "http://localhost:8000"
 DEVICE_ID = None  # Will be loaded from file or registered
@@ -42,28 +51,60 @@ class PerformanceMonitor:
         self.running = True
 
     def collect_metrics(self) -> Dict[str, Any]:
-        """Collect current performance metrics"""
+        """Collect current performance metrics - prefer Node.js systeminformation"""
+        # Try Node.js systeminformation first (more accurate)
+        if NODEJS_AVAILABLE and get_realtime_metrics_nodejs:
+            try:
+                node_metrics = get_realtime_metrics_nodejs()
+                if node_metrics:
+                    node_metrics["device_id"] = self.device_id
+                    node_metrics["timestamp"] = datetime.utcnow().isoformat()
+                    logger.debug(
+                        f"Got metrics from Node.js: CPU={node_metrics.get('cpu_percent')}%, Memory={node_metrics.get('memory_percent')}%"
+                    )
+                    return node_metrics
+            except Exception as e:
+                logger.warning(f"Node.js metrics failed: {e}, falling back to Python")
+
+        # Fallback to Python psutil
         try:
+            # Get CPU frequency
+            cpu_freq = psutil.cpu_freq()
+            cpu_frequency_mhz = cpu_freq.current if cpu_freq else None
+
+            # Get GPU memory
+            gpu_memory_used_mb = self._get_gpu_memory_used()
+            gpu_memory_total_mb = self._get_gpu_memory_total()
+
+            # Get memory info
+            vm = psutil.virtual_memory()
+
+            # Get disk and network IO
+            disk_io = self._get_disk_io()
+            network_io = self._get_network_io()
+
             metrics = {
                 "device_id": self.device_id,
                 "timestamp": datetime.utcnow().isoformat(),
                 "cpu_percent": psutil.cpu_percent(interval=1),
                 "cpu_temperature": self._get_cpu_temperature(),
-                "cpu_frequency": psutil.cpu_freq().current
-                if psutil.cpu_freq()
-                else None,
+                "cpu_frequency_mhz": cpu_frequency_mhz,
                 "gpu_percent": self._get_gpu_usage(),
                 "gpu_temperature": self._get_gpu_temperature(),
-                "gpu_memory_used": self._get_gpu_memory_used(),
-                "gpu_memory_total": self._get_gpu_memory_total(),
-                "memory_percent": psutil.virtual_memory().percent,
-                "memory_used": psutil.virtual_memory().used / (1024 * 1024),  # MB
-                "memory_available": psutil.virtual_memory().available
-                / (1024 * 1024),  # MB
-                "disk_io": self._get_disk_io(),
-                "network_io": self._get_network_io(),
+                "gpu_memory_used_mb": gpu_memory_used_mb,
+                "gpu_memory_total_mb": gpu_memory_total_mb,
+                "memory_percent": vm.percent,
+                "memory_used_mb": vm.used / (1024 * 1024),  # MB
+                "memory_available_mb": vm.available / (1024 * 1024),  # MB
+                "disk_read_mbps": disk_io.get("read_mbps", 0) if disk_io else 0,
+                "disk_write_mbps": disk_io.get("write_mbps", 0) if disk_io else 0,
+                "network_sent_mbps": network_io.get("sent_mbps", 0)
+                if network_io
+                else 0,
+                "network_recv_mbps": network_io.get("recv_mbps", 0)
+                if network_io
+                else 0,
                 "process_count": len(psutil.pids()),
-                "top_processes": self._get_top_processes(),
             }
             return metrics
         except Exception as e:

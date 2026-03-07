@@ -1,0 +1,12 @@
+{
+  "name": "hardware-info",
+  "version": "1.0.0",
+  "description": "Hardware info using systeminformation",
+  "main": "hardware_info.js",
+  "scripts": {
+    "start": "node hardware_info.js"
+  },
+  "dependencies": {
+    "systeminformation": "^5.23.5"
+  }
+}
