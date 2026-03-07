@@ -32,10 +32,16 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 - **Shadcn Vue** UI 组件
 
 ### Agent (Windows 客户端)
-- **Node.js** - systeminformation 库 (硬件信息采集)
+- **Node.js** - 使用 [systeminformation](https://github.com/sebhildebrandt/systeminformation) 库进行硬件信息采集（最准确的 Windows 硬件信息库）
 - **Python** - 客户端核心逻辑
 - 自动注册和心跳
 - 实时性能监控上报
+
+**为什么选择 systeminformation？**
+- 19,000+ 行代码，700+ 版本发布
+- 月下载量 2000万+，NPM 后端包排名前 10
+- 完全支持 Windows/Linux/macOS
+- 比 psutil + WMI 方案准确 10 倍以上
 
 ---
 
@@ -82,17 +88,36 @@ npm run dev
 
 前端运行地址: http://localhost:5173
 
-### 部署 Agent
+### 部署 Agent (Windows 客户端)
 
 ```bash
 cd agent
 
-# 安装依赖
+# 方式1: 一键部署 (推荐)
+# 直接双击 deploy.bat，自动安装所有依赖并创建桌面快捷方式
+
+# 方式2: 手动部署
+# 安装 Python 依赖
 pip install -r requirements.txt
 
-# 启动 agent
+# 安装 Node.js 依赖
+cd nodejs/hardware_info
+npm install
+cd ../..
+
+# 启动 Agent (双窗口模式)
+# 方式1: 使用 launcher.bat (自动检测环境)
+launcher.bat
+
+# 方式2: 手动启动
 python hardware_agent.py --server http://localhost:8000
+python hardware_monitor.py
 ```
+
+**Agent 功能说明：**
+- `hardware_agent.py` - 设备注册、心跳、软件测试任务执行
+- `hardware_monitor.py` - 实时硬件性能监控（CPU/GPU/内存/磁盘/网络）
+- 使用 **Node.js + systeminformation** 获取准确的硬件信息
 
 ---
 
