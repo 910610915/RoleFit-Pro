@@ -14,9 +14,10 @@ from app.models.sqlite import (
     Device,
 )
 from app.schemas.performance import (
-    PerformanceMetricCreate,
     PerformanceMetricResponse,
     PerformanceMetricListResponse,
+    MetricDataCreate,
+    MetricsBatchCreate,
     SoftwareBenchmarkCreate,
     SoftwareBenchmarkResponse,
     SoftwareBenchmarkListResponse,
@@ -29,7 +30,6 @@ from app.schemas.performance import (
     AIAnalysisReportCreate,
     AIAnalysisReportResponse,
     AIAnalysisReportListResponse,
-    MetricsBatchCreate,
     BenchmarkStartRequest,
     BenchmarkResultRequest,
     AIAnalysisRequest,
@@ -63,7 +63,7 @@ router = APIRouter(prefix="/performance", tags=["Performance"])
     response_model=PerformanceMetricResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_metric(metric: PerformanceMetricCreate, db: Session = Depends(get_db_sync)):
+def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
     """创建性能指标"""
     db_metric = PerformanceMetric(**metric.model_dump())
     db.add(db_metric)
@@ -76,15 +76,33 @@ def create_metric(metric: PerformanceMetricCreate, db: Session = Depends(get_db_
 def create_metrics_batch(batch: MetricsBatchCreate, db: Session = Depends(get_db_sync)):
     """批量创建性能指标"""
     import json
+    from datetime import datetime
 
     created_count = 0
     for metric_data in batch.metrics:
-        metric_data.device_id = batch.device_id
-
-        # 将top_processes列表转换为JSON字符串
         metric_dict = metric_data.model_dump()
-        if metric_dict.get("top_processes"):
-            metric_dict["top_processes"] = json.dumps(metric_dict["top_processes"])
+
+        # 设置 device_id
+        metric_dict["device_id"] = batch.device_id
+
+        # 处理时间戳（可能是字符串格式）
+        timestamp_val = metric_dict.get("timestamp")
+        if timestamp_val:
+            if isinstance(timestamp_val, str):
+                # 解析 ISO 格式字符串
+                try:
+                    metric_dict["timestamp"] = datetime.fromisoformat(
+                        timestamp_val.replace("Z", "+00:00")
+                    )
+                except:
+                    metric_dict["timestamp"] = datetime.utcnow()
+        else:
+            metric_dict["timestamp"] = datetime.utcnow()
+
+        # 将 top_processes 列表转换为 JSON 字符串
+        top_processes = metric_dict.pop("top_processes", None)
+        if top_processes:
+            metric_dict["top_processes"] = json.dumps(top_processes)
 
         db_metric = PerformanceMetric(**metric_dict)
         db.add(db_metric)
