@@ -36,7 +36,7 @@ def run_node_script(args: list = None) -> Optional[Dict[str, Any]]:
     try:
         cmd = [NODE_EXE, NODE_SCRIPT] + args
         # logger.debug(f"Running Node.js command: {' '.join(cmd)}")
-        
+
         # Increase timeout to 60 seconds for slower machines
         result = subprocess.run(
             cmd,
@@ -49,11 +49,13 @@ def run_node_script(args: list = None) -> Optional[Dict[str, Any]]:
         )
 
         if result.returncode != 0:
-            logger.error(f"Node.js script error (code {result.returncode}): {result.stderr}")
+            logger.error(
+                f"Node.js script error (code {result.returncode}): {result.stderr}"
+            )
             # Try to parse stdout even if return code is non-zero, sometimes partial json is printed
             if not result.stdout.strip():
                 return None
-        
+
         if not result.stdout:
             logger.error("Node.js script returned empty stdout")
             return None
@@ -171,15 +173,17 @@ def get_realtime_metrics() -> Dict[str, Any]:
     mem_total = mem_data.get("total", 0) or 0
     mem_used = mem_data.get("used", 0) or 0
     mem_avail = mem_data.get("available", 0) or 0
-    
+
     # Calculate percent if missing
     mem_percent = mem_data.get("percent")
     if mem_percent is None and mem_total > 0:
         mem_percent = round((mem_used / mem_total) * 100, 2)
-        
+
     metrics = {
         "cpu_percent": data.get("cpu", {}).get("percent", 0),
-        "cpu_frequency_mhz": data.get("cpu", {}).get("speed", 0),
+        # Node.js返回的speed是GHz，需要转换为MHz
+        "cpu_frequency_mhz": round((data.get("cpu", {}).get("speed", 0) or 0) * 1000),
+        "cpu_temperature": data.get("cpu", {}).get("temperature"),
         "memory_percent": mem_percent,
         "memory_used_mb": round(mem_used / 1024 / 1024, 2),
         "memory_available_mb": round(mem_avail / 1024 / 1024, 2),

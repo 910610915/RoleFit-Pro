@@ -271,6 +271,7 @@ async function getRealtimeMetrics() {
     // Get realtime metrics (CPU, memory, etc.)
     const cpuLoad = await si.currentLoad();
     const cpuCurrentSpeed = await si.cpuCurrentSpeed();
+    const cpuTemp = await si.cpuTemperature();
     const memory = await si.mem();
     const graphics = await si.graphics();
     const diskIO = await si.disksIO();
@@ -363,6 +364,7 @@ async function getRealtimeMetrics() {
       cpu: {
         percent: Math.round(cpuLoad.currentLoad * 100) / 100,
         speed: cpuCurrentSpeed.avg,
+        temperature: cpuTemp ? cpuTemp.main : null,
       },
       
       // Memory
