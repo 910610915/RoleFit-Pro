@@ -191,10 +191,12 @@ const settings = reactive({
 
 const providerOptions = [
   { label: '硅基流动 (SiliconFlow)', value: 'siliconflow' },
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'DeepSeek', value: 'deepseek' },
-  { label: '通义千问 (Qwen)', value: 'qwen' },
-  { label: '智谱 AI', value: 'zhipu' },
+  { label: 'OpenRouter', value: 'openrouter' },
+  { label: 'DeepSeek-V3', value: 'deepseek/deepseek-chat' },
+  { label: 'Qwen 2.5 72B (推荐)', value: 'qwen/qwen-2.5-72b-instruct' },
+  { label: 'Qwen 2.5 7B (免费)', value: 'qwen/qwen-2.5-7b-instruct-free' },
+  { label: 'Claude 3.5 Sonnet', value: 'anthropic/claude-3.5-sonnet' },
+  { label: 'GPT-4o', value: 'openai/gpt-4o' },
   { label: '本地 (Local / Ollama)', value: 'local_ollama', baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama' },
   { label: '自定义 (Custom)', value: 'custom' }
 ]
@@ -327,9 +329,16 @@ async function sendMessage() {
       settings.baseUrl // 新增参数
     )
     
-    if (res && res.content) {
-      addMessage(res.content)
+    // 关键修复：Axios 返回的是 response 对象，数据在 data 字段中
+    const data = res.data || res
+    
+    if (data && data.content) {
+      addMessage(data.content)
+    } else if (data && data.error) {
+       // 如果后端返回了错误标识
+       addMessage(`❌ AI 服务报错: ${data.content}`)
     } else {
+      console.warn('AI Response empty:', data)
       addMessage('🤔 AI 似乎没有返回内容，请稍后再试。')
     }
 

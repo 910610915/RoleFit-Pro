@@ -32,10 +32,8 @@ export interface AIAnalysisReport {
 
 export const aiApi = {
   // Analyze realtime metrics
-  analyzeMetrics: (deviceId: string, seconds?: number) =>
-    api.post<AIAnalysisResponse>('/ai/analyze/metrics', null, {
-      params: { device_id: deviceId, seconds }
-    }),
+  analyzeMetrics: (data: { device_id: string; seconds?: number; api_key?: string; provider?: string; model?: string; base_url?: string }) =>
+    api.post<AIAnalysisResponse>('/ai/analyze/metrics', data),
     
   // Analyze benchmark results
   analyzeBenchmark: (benchmarkId: string) =>
