@@ -196,7 +196,8 @@ async function getRealtimeMetrics() {
       gpuLoad,
       gpuMemory,
       diskIO,
-      networkIO
+      networkIO,
+      processes
     ] = await Promise.all([
       si.currentLoad(),
       si.cpuCurrentSpeed(),
@@ -204,7 +205,8 @@ async function getRealtimeMetrics() {
       si.graphics(),
       si.fsSize(),
       si.disksIO(),
-      si.networkStats()
+      si.networkStats(),
+      si.processes()
     ]);
 
     // Get GPU metrics - try systeminformation first, then nvidia-smi fallback
@@ -277,8 +279,17 @@ async function getRealtimeMetrics() {
         tx_mbps: networkIO ? Math.round(networkIO.tx_sec / (1024 * 1024) * 100) / 100 : 0
       },
       
-      // Process count
-      processes: os.loadavg(), // Just for reference
+      // Process list - Top 10 by CPU usage
+      top_processes: processes.list
+        .sort((a, b) => b.cpu - a.cpu)
+        .slice(0, 10)
+        .map(p => ({
+          name: p.name,
+          pid: p.pid,
+          cpu: Math.round(p.cpu * 100) / 100,
+          memory: Math.round(p.mem * 100) / 100,
+          path: p.path || ''
+        })),
       
       timestamp: new Date().toISOString()
     };

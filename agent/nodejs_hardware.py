@@ -36,14 +36,26 @@ def run_node_script(args: list = None) -> Optional[Dict[str, Any]]:
     try:
         cmd = [NODE_EXE, NODE_SCRIPT] + args
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=30, cwd=NODE_SCRIPT_DIR
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=NODE_SCRIPT_DIR,
+            encoding="utf-8",
+            errors="replace",
         )
 
         if result.returncode != 0:
             logger.error(f"Node.js script error: {result.stderr}")
             return None
 
-        return json.loads(result.stdout)
+        # 修复Windows路径中的反斜杠问题
+        # Windows路径如 C:\Users 会导致JSON解析失败，因为\U不是有效转义
+        stdout = result.stdout
+        # 将反斜杠替换为正斜杠（Windows路径标准化）
+        stdout = stdout.replace("\\\\", "/").replace("\\", "/")
+
+        return json.loads(stdout)
     except subprocess.TimeoutExpired:
         logger.error("Node.js script timeout")
         return None
@@ -165,6 +177,7 @@ def get_realtime_metrics() -> Dict[str, Any]:
         "disk_write_mbps": data.get("disk", {}).get("write_mbps", 0),
         "network_sent_mbps": data.get("network", {}).get("tx_mbps", 0),
         "network_recv_mbps": data.get("network", {}).get("rx_mbps", 0),
+        "top_processes": data.get("top_processes", []),
     }
 
     return metrics
