@@ -65,11 +65,59 @@ router = APIRouter(prefix="/performance", tags=["Performance"])
 )
 def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
     """创建性能指标"""
-    db_metric = PerformanceMetric(**metric.model_dump())
+    import json
+
+    data = metric
+    
+    # 构建模型数据
+    db_metric = PerformanceMetric(
+        device_id=data.device_id,
+        timestamp=data.timestamp if data.timestamp else datetime.utcnow(),
+        cpu_percent=data.cpu_percent,
+        cpu_temperature=data.cpu_temperature,
+        cpu_power_watts=data.cpu_power_watts,
+        cpu_frequency_mhz=data.cpu_frequency_mhz,
+        gpu_percent=data.gpu_percent,
+        gpu_temperature=data.gpu_temperature,
+        gpu_power_watts=data.gpu_power_watts,
+        gpu_frequency_mhz=data.gpu_frequency_mhz,
+        gpu_memory_used_mb=data.gpu_memory_used_mb,
+        gpu_memory_total_mb=data.gpu_memory_total_mb,
+        memory_percent=data.memory_percent,
+        memory_used_mb=data.memory_used_mb,
+        memory_available_mb=data.memory_available_mb,
+        disk_read_mbps=data.disk_read_mbps,
+        disk_write_mbps=data.disk_write_mbps,
+        disk_io_percent=data.disk_io_percent,
+        network_sent_mbps=data.network_sent_mbps,
+        network_recv_mbps=data.network_recv_mbps,
+        process_count=data.process_count,
+        top_processes=json.dumps(data.top_processes) if data.top_processes else None,
+        raw_data=data.raw_data,
+        disk_io_details=json.dumps(data.disk_io_details) if data.disk_io_details else None,
+    )
+    
     db.add(db_metric)
     db.commit()
     db.refresh(db_metric)
-    return db_metric
+
+    # 手动构建响应字典，因为 top_processes 和 disk_io_details 在数据库中是 JSON 字符串
+    metric_dict = {c.name: getattr(db_metric, c.name) for c in db_metric.__table__.columns}
+
+    # 解析 JSON 字段
+    if metric_dict.get("top_processes"):
+        try:
+            metric_dict["top_processes"] = json.loads(metric_dict["top_processes"])
+        except:
+            metric_dict["top_processes"] = None
+            
+    if metric_dict.get("disk_io_details"):
+        try:
+            metric_dict["disk_io_details"] = json.loads(metric_dict["disk_io_details"])
+        except:
+            metric_dict["disk_io_details"] = None
+            
+    return metric_dict
 
 
 @router.post("/metrics/batch", status_code=status.HTTP_201_CREATED)
@@ -103,6 +151,15 @@ def create_metrics_batch(batch: MetricsBatchCreate, db: Session = Depends(get_db
         top_processes = metric_dict.pop("top_processes", None)
         if top_processes:
             metric_dict["top_processes"] = json.dumps(top_processes)
+
+        # 将 disk_io_details 列表转换为 JSON 字符串
+        disk_io_details = metric_dict.pop("disk_io_details", None)
+        if disk_io_details:
+            metric_dict["disk_io_details"] = json.dumps(disk_io_details)
+
+        # Filter out keys that are not in the model to prevent TypeError
+        valid_keys = {c.name for c in PerformanceMetric.__table__.columns}
+        metric_dict = {k: v for k, v in metric_dict.items() if k in valid_keys}
 
         db_metric = PerformanceMetric(**metric_dict)
         db.add(db_metric)
@@ -188,10 +245,19 @@ def get_latest_metric(device_id: str, db: Session = Depends(get_db_sync)):
 
     # 解析 top_processes JSON 字符串
     if metric_dict["top_processes"]:
-        try:
-            metric_dict["top_processes"] = json.loads(metric_dict["top_processes"])
-        except:
-            metric_dict["top_processes"] = None
+        if isinstance(metric_dict["top_processes"], str):
+            try:
+                metric_dict["top_processes"] = json.loads(metric_dict["top_processes"])
+            except:
+                metric_dict["top_processes"] = None
+
+    # 解析 disk_io_details JSON 字符串
+    if metric_dict.get("disk_io_details"):
+        if isinstance(metric_dict["disk_io_details"], str):
+            try:
+                metric_dict["disk_io_details"] = json.loads(metric_dict["disk_io_details"])
+            except:
+                metric_dict["disk_io_details"] = None
 
     return metric_dict
 
@@ -203,6 +269,8 @@ def get_realtime_metrics(
     db: Session = Depends(get_db_sync),
 ):
     """获取实时性能指标 (最近N秒)"""
+    import json
+
     since = datetime.utcnow() - timedelta(seconds=seconds)
     result = db.execute(
         select(PerformanceMetric)
@@ -220,9 +288,32 @@ def get_realtime_metrics(
     avg_gpu = sum(m.gpu_percent or 0 for m in metrics) / len(metrics)
     avg_memory = sum(m.memory_percent or 0 for m in metrics) / len(metrics)
 
+    # Convert to dicts and parse JSON fields
+    metrics_data = []
+    for m in metrics:
+        m_dict = {c.name: getattr(m, c.name) for c in m.__table__.columns}
+        
+        # Parse disk_io_details
+        if m_dict.get("disk_io_details"):
+            if isinstance(m_dict["disk_io_details"], str):
+                try:
+                    m_dict["disk_io_details"] = json.loads(m_dict["disk_io_details"])
+                except:
+                    m_dict["disk_io_details"] = None
+        
+        # Parse top_processes
+        if m_dict.get("top_processes"):
+            if isinstance(m_dict["top_processes"], str):
+                try:
+                    m_dict["top_processes"] = json.loads(m_dict["top_processes"])
+                except:
+                    m_dict["top_processes"] = None
+                    
+        metrics_data.append(m_dict)
+
     return {
         "device_id": device_id,
-        "metrics": metrics,
+        "metrics": metrics_data,
         "averages": {
             "cpu_percent": round(avg_cpu, 2),
             "gpu_percent": round(avg_gpu, 2),

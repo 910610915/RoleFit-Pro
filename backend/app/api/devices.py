@@ -6,6 +6,9 @@ from typing import Optional, List, Any
 from datetime import datetime, timedelta
 import uuid
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db_sync
 from app.models.sqlite import Device, User
@@ -113,10 +116,21 @@ def device_heartbeat(
     )
     device = result.scalar_one_or_none()
 
+    # If device not found, auto-register it
     if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Device not found"
+        logger.info(f"Device not found, auto-registering: {heartbeat_data.mac_address}")
+        device = Device(
+            device_name=heartbeat_data.mac_address[:8],
+            mac_address=heartbeat_data.mac_address,
+            ip_address="",
+            hostname="",
+            status=heartbeat_data.status,
+            last_seen_at=datetime.utcnow(),
         )
+        db.add(device)
+        db.commit()
+        db.refresh(device)
+        return {"status": "registered", "device_id": str(device.id)}
 
     # Update device status
     device.status = heartbeat_data.status
@@ -177,6 +191,8 @@ def list_devices(
             or_(
                 Device.device_name.ilike(f"%{keyword}%"),
                 Device.mac_address.ilike(f"%{keyword}%"),
+                Device.ip_address.ilike(f"%{keyword}%"),
+                Device.hostname.ilike(f"%{keyword}%"),
             )
         )
 
@@ -250,3 +266,183 @@ def delete_device(device_id: str, db: Session = Depends(get_db_sync)):
 
     db.delete(device)
     db.commit()
+
+
+# ==================== Device Profile (设备画像) ====================
+
+
+@router.get("/{device_id}/profile")
+def get_device_profile(device_id: str, db: Session = Depends(get_db_sync)):
+    """获取设备画像 - 完整的设备档案"""
+    from sqlalchemy import select, func
+    from app.models.sqlite import TestResult, PerformanceMetric
+
+    result = db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+
+    # Get test results count and latest score
+    test_result = db.execute(
+        select(
+            func.count(TestResult.id).label("total_tests"),
+            func.avg(TestResult.overall_score).label("avg_score"),
+            func.max(TestResult.created_at).label("last_test"),
+        ).where(TestResult.device_id == device_id)
+    )
+    test_stats = test_result.fetchone()
+
+    # Get performance metrics count
+    metrics_result = db.execute(
+        select(func.count(PerformanceMetric.id)).where(
+            PerformanceMetric.device_id == device_id
+        )
+    )
+    metrics_count = metrics_result.scalar() or 0
+
+    # Build comprehensive profile
+    profile = {
+        # 基础信息
+        "basic_info": {
+            "id": device.id,
+            "device_name": device.device_name,
+            "hostname": device.hostname,
+            "mac_address": device.mac_address,
+            "ip_address": device.ip_address,
+            "status": device.status,
+            "registered_at": device.registered_at.isoformat()
+            if device.registered_at
+            else None,
+            "last_seen_at": device.last_seen_at.isoformat()
+            if device.last_seen_at
+            else None,
+        },
+        # 硬件信息
+        "hardware": {
+            "cpu": {
+                "model": device.cpu_model,
+                "cores": device.cpu_cores,
+                "threads": device.cpu_threads,
+                "base_clock": device.cpu_base_clock,
+            },
+            "gpu": {
+                "model": device.gpu_model,
+                "vram_mb": device.gpu_vram_mb,
+                "driver_version": device.gpu_driver_version,
+            },
+            "memory": {
+                "total_gb": device.ram_total_gb,
+                "frequency": device.ram_frequency,
+            },
+            "storage": {
+                "model": device.disk_model,
+                "capacity_tb": device.disk_capacity_tb,
+                "type": device.disk_type,
+            },
+            "os": {
+                "name": device.os_name,
+                "version": device.os_version,
+                "build": device.os_build,
+            },
+        },
+        # 归属信息
+        "ownership": {
+            "department": device.department,
+            "position": device.position,
+            "assigned_to": device.assigned_to,
+            "employee_name": device.employee_name,
+            "employee_id": device.employee_id,
+            "employee_email": device.employee_email,
+        },
+        # 采购信息
+        "purchase": {
+            "purchase_date": device.purchase_date.isoformat()
+            if device.purchase_date
+            else None,
+            "purchase_price": device.purchase_price,
+            "purchase_vendor": device.purchase_vendor,
+            "warranty_expire_date": device.warranty_expire_date.isoformat()
+            if device.warranty_expire_date
+            else None,
+            "invoice_number": device.invoice_number,
+        },
+        # 资产信息
+        "asset": {
+            "asset_tag": device.asset_tag,
+            "serial_number": device.serial_number,
+            "manufacturer": device.manufacturer,
+            "model": device.model,
+            "location": device.location,
+        },
+        # 使用统计
+        "usage_stats": {
+            "total_test_count": test_stats[0] or 0,
+            "average_score": float(test_stats[1]) if test_stats[1] else None,
+            "last_test_date": test_stats[2].isoformat() if test_stats[2] else None,
+            "metrics_count": metrics_count,
+            "total_uptime_hours": device.total_uptime_hours,
+        },
+        # 备注
+        "notes": device.notes,
+    }
+
+    return profile
+
+
+@router.put("/{device_id}/profile")
+def update_device_profile(
+    device_id: str, profile_data: dict, db: Session = Depends(get_db_sync)
+):
+    """更新设备画像"""
+    result = db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+
+    # Update ownership fields
+    if "employee_name" in profile_data:
+        device.employee_name = profile_data["employee_name"]
+    if "employee_id" in profile_data:
+        device.employee_id = profile_data["employee_id"]
+    if "employee_email" in profile_data:
+        device.employee_email = profile_data["employee_email"]
+    if "department" in profile_data:
+        device.department = profile_data["department"]
+    if "position" in profile_data:
+        device.position = profile_data["position"]
+    if "assigned_to" in profile_data:
+        device.assigned_to = profile_data["assigned_to"]
+
+    # Update purchase fields
+    if "purchase_date" in profile_data:
+        device.purchase_date = profile_data["purchase_date"]
+    if "purchase_price" in profile_data:
+        device.purchase_price = profile_data["purchase_price"]
+    if "purchase_vendor" in profile_data:
+        device.purchase_vendor = profile_data["purchase_vendor"]
+    if "warranty_expire_date" in profile_data:
+        device.warranty_expire_date = profile_data["warranty_expire_date"]
+    if "invoice_number" in profile_data:
+        device.invoice_number = profile_data["invoice_number"]
+
+    # Update asset fields
+    if "asset_tag" in profile_data:
+        device.asset_tag = profile_data["asset_tag"]
+    if "serial_number" in profile_data:
+        device.serial_number = profile_data["serial_number"]
+    if "manufacturer" in profile_data:
+        device.manufacturer = profile_data["manufacturer"]
+    if "model" in profile_data:
+        device.model = profile_data["model"]
+    if "location" in profile_data:
+        device.location = profile_data["location"]
+
+    # Update notes
+    if "notes" in profile_data:
+        device.notes = profile_data["notes"]
+
+    db.commit()
+
+    return {"message": "设备画像已更新", "device_id": device_id}

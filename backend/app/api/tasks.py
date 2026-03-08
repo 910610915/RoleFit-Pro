@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
@@ -115,10 +116,39 @@ async def list_tasks(
     )
 
 
+# Agent polling endpoint - must be BEFORE /{task_id}
+@router.get("/pending")
+def get_pending_tasks_sync(
+    device_id: str = Query(..., description="设备ID"),
+    db: Session = Depends(get_db_sync),
+):
+    """Get pending tasks for a device (polled by agent)"""
+    from sqlalchemy import select
+
+    result = db.execute(
+        select(TestTask)
+        .where(TestTask.task_status == "pending")
+        .order_by(TestTask.created_at.asc())
+        .limit(10)
+    )
+    tasks = result.scalars().all()
+
+    # Filter tasks that target this device
+    pending_tasks = []
+    for task in tasks:
+        task_data = task_to_response(task)
+        # Check if this device is in the target list
+        target_devices = task_data.get("target_device_ids", [])
+        if not target_devices or device_id in target_devices:
+            pending_tasks.append(task_data)
+
+    return {"items": pending_tasks, "total": len(pending_tasks)}
+
+
 @router.get("/{task_id}", response_model=TestTaskResponse)
-async def get_task(task_id: str, db: AsyncSession = Depends(get_db_sync)):
+def get_task(task_id: str, db: Session = Depends(get_db_sync)):
     """Get task details"""
-    result = await db.execute(select(TestTask).where(TestTask.id == task_id))
+    result = db.execute(select(TestTask).where(TestTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -289,3 +319,6 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db_sync)):
 
     await db.delete(task)
     await db.commit()
+
+
+# End of file
