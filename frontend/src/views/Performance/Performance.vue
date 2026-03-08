@@ -73,6 +73,22 @@
       </div>
     </section>
 
+    <!-- Memory and Disk IO Charts -->
+    <section class="charts-section">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>内存 使用率趋势</h3>
+        </div>
+        <div ref="memoryChartRef" style="height: 250px;"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>磁盘IO 趋势</h3>
+        </div>
+        <div ref="diskIOChartRef" style="height: 250px;"></div>
+      </div>
+    </section>
+
     <!-- Customizable Widget Board -->
     <section class="widget-board" v-if="userRole === 'admin' || userRole === 'manager'">
       <div class="widget-header">
@@ -244,8 +260,12 @@ const currentMetrics = ref<any[]>([])
 const timeRange = ref('5m')
 const cpuChartRef = ref<HTMLElement | null>(null)
 const gpuChartRef = ref<HTMLElement | null>(null)
+const memoryChartRef = ref<HTMLElement | null>(null)
+const diskIOChartRef = ref<HTMLElement | null>(null)
 let cpuChart: echarts.ECharts | null = null
 let gpuChart: echarts.ECharts | null = null
+let memoryChart: echarts.ECharts | null = null
+let diskIOChart: echarts.ECharts | null = null
 const gpuVramHistory = ref<number[]>([])
 
 const benchmarks = ref<any[]>([])
@@ -473,7 +493,7 @@ const loadAlerts = async () => {
 }
 
 const refreshCharts = async () => {
-  if (!selectedDevice.value || !cpuChart || !gpuChart) return
+  if (!selectedDevice.value || !cpuChart || !gpuChart || !memoryChart || !diskIOChart) return
   
   const seconds = timeRange.value === '1m' ? 60 : timeRange.value === '5m' ? 300 : 900
   
@@ -485,6 +505,9 @@ const refreshCharts = async () => {
       const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
       const cpuData = data.metrics.map((m: any) => m.cpu_percent || 0)
       const gpuData = data.metrics.map((m: any) => m.gpu_percent || 0)
+      const memoryData = data.metrics.map((m: any) => m.memory_percent || 0)
+      const diskReadData = data.metrics.map((m: any) => m.disk_read_mbps || 0)
+      const diskWriteData = data.metrics.map((m: any) => m.disk_write_mbps || 0)
       gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0) / 1024) // Convert MB to GB
       
       cpuChart.setOption({
@@ -495,6 +518,19 @@ const refreshCharts = async () => {
       gpuChart.setOption({
         xAxis: { data: timestamps },
         series: [{ data: gpuData }]
+      })
+      
+      memoryChart.setOption({
+        xAxis: { data: timestamps },
+        series: [{ data: memoryData }]
+      })
+      
+      diskIOChart.setOption({
+        xAxis: { data: timestamps },
+        series: [
+          { data: diskReadData },
+          { data: diskWriteData }
+        ]
       })
     }
   } catch (e) {
@@ -538,6 +574,55 @@ const initCharts = () => {
         itemStyle: { color: '#8b5cf6' },
         data: []
       }]
+    })
+  }
+  
+  if (memoryChartRef.value) {
+    memoryChart = echarts.init(memoryChartRef.value)
+    memoryChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: 40, right: 20, top: 20, bottom: 30 },
+      xAxis: { type: 'category', data: [] },
+      yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+      series: [{
+        name: '内存',
+        type: 'line',
+        smooth: true,
+        areaStyle: { color: 'rgba(16, 185, 129, 0.2)' },
+        lineStyle: { color: '#10b981' },
+        itemStyle: { color: '#10b981' },
+        data: []
+      }]
+    })
+  }
+  
+  if (diskIOChartRef.value) {
+    diskIOChart = echarts.init(diskIOChartRef.value)
+    diskIOChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: 40, right: 20, top: 20, bottom: 30 },
+      xAxis: { type: 'category', data: [] },
+      yAxis: { type: 'value', axisLabel: { formatter: '{value} MB/s' } },
+      series: [
+        {
+          name: '读取',
+          type: 'line',
+          smooth: true,
+          areaStyle: { color: 'rgba(245, 158, 11, 0.2)' },
+          lineStyle: { color: '#f59e0b' },
+          itemStyle: { color: '#f59e0b' },
+          data: []
+        },
+        {
+          name: '写入',
+          type: 'line',
+          smooth: true,
+          areaStyle: { color: 'rgba(239, 68, 68, 0.2)' },
+          lineStyle: { color: '#ef4444' },
+          itemStyle: { color: '#ef4444' },
+          data: []
+        }
+      ]
     })
   }
 }
@@ -624,6 +709,8 @@ onUnmounted(() => {
   }
   if (cpuChart) cpuChart.dispose()
   if (gpuChart) gpuChart.dispose()
+  if (memoryChart) memoryChart.dispose()
+  if (diskIOChart) diskIOChart.dispose()
 })
 </script>
 
