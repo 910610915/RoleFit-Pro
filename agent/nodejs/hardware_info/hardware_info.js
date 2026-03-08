@@ -184,55 +184,65 @@ async function getNvidiaGpuMetrics() {
   });
 }
 
-/**
- * Get realtime metrics (CPU, memory, etc.)
- */
 async function getRealtimeMetrics() {
   try {
-    const [
-      cpuLoad,
-      cpuCurrentSpeed,
-      memory,
-      gpuLoad,
-      gpuMemory,
-      diskIO,
-      networkIO,
-      processes
-    ] = await Promise.all([
-      si.currentLoad(),
-      si.cpuCurrentSpeed(),
-      si.mem(),
-      si.graphics(),
-      si.fsSize(),
-      si.disksIO(),
-      si.networkStats(),
-      si.processes()
-    ]);
-
-    // Get GPU metrics - try systeminformation first, then nvidia-smi fallback
-    let gpuPercent = null;
-    let gpuMemoryUsed = null;
-    let gpuMemoryTotal = null;
-    let gpuTemperature = null;
-
-    // First try systeminformation
-    if (gpuLoad.controllers && gpuLoad.controllers.length > 0) {
-      const gpu = gpuLoad.controllers[0];
-      gpuPercent = gpu.utilizationGpu || null;
-      gpuMemoryUsed = gpu.utilizationMemory ? Math.round(gpu.memoryUsed * 1024) : null;
-      gpuMemoryTotal = gpu.memoryTotal ? Math.round(gpu.memoryTotal * 1024) : null;
-      gpuTemperature = gpu.temperatureGpu || null;
+    // Get realtime metrics (CPU, memory, etc.)
+    const cpuLoad = await si.currentLoad();
+    const cpuCurrentSpeed = await si.cpuCurrentSpeed();
+    const memory = await si.mem();
+    const graphics = await si.graphics();
+    const diskIO = await si.disksIO();
+    const networkStats = await si.networkStats();
+    
+    // Get processes separately as it can be heavy
+    let processes = { list: [] };
+    try {
+      // Limit to top 20 processes to save time
+      processes = await si.processes();
+    } catch (e) {
+      // Ignore process error
     }
 
-    // Fallback to nvidia-smi if systeminformation returns null
-    if (gpuPercent === null || gpuMemoryUsed === null) {
-      const nvidiaMetrics = await getNvidiaGpuMetrics();
-      if (nvidiaMetrics) {
-        gpuPercent = gpuPercent !== null ? gpuPercent : nvidiaMetrics.percent;
-        gpuMemoryUsed = gpuMemoryUsed !== null ? gpuMemoryUsed : nvidiaMetrics.memory_used_mb;
-        gpuMemoryTotal = gpuMemoryTotal !== null ? gpuMemoryTotal : nvidiaMetrics.memory_total_mb;
-        gpuTemperature = gpuTemperature !== null ? gpuTemperature : nvidiaMetrics.temperature;
+    // Process GPU info
+    let gpuPercent = 0;
+    let gpuMemoryUsed = 0;
+    let gpuMemoryTotal = 0;
+    let gpuTemperature = 0;
+
+    if (graphics.controllers && graphics.controllers.length > 0) {
+      const gpu = graphics.controllers[0];
+      gpuPercent = gpu.utilizationGpu || 0;
+      gpuMemoryUsed = gpu.memoryUsed || 0;
+      gpuMemoryTotal = gpu.memoryTotal || 0;
+      gpuTemperature = gpu.temperatureGpu || 0;
+      
+      // If VRAM is missing but we have vram from info
+      if (!gpuMemoryTotal && gpu.vram) {
+          gpuMemoryTotal = gpu.vram;
       }
+    }
+
+    // Disk IO (aggregate all disks)
+    let read_sec = 0;
+    let write_sec = 0;
+    
+    if (diskIO) {
+        read_sec = diskIO.rIO_sec || 0;
+        write_sec = diskIO.wIO_sec || 0;
+    }
+
+    // Network (aggregate all interfaces)
+    let rx_sec = 0;
+    let tx_sec = 0;
+    
+    if (networkStats && Array.isArray(networkStats)) {
+        for (const iface of networkStats) {
+            rx_sec += iface.rx_sec || 0;
+            tx_sec += iface.tx_sec || 0;
+        }
+    } else if (networkStats) {
+        rx_sec = networkStats.rx_sec || 0;
+        tx_sec = networkStats.tx_sec || 0;
     }
 
     const result = {
@@ -240,17 +250,15 @@ async function getRealtimeMetrics() {
       cpu: {
         percent: Math.round(cpuLoad.currentLoad * 100) / 100,
         speed: cpuCurrentSpeed.avg,
-        cores: cpuLoad.cpus.map(c => Math.round(c.load * 100) / 100)
       },
       
       // Memory
       memory: {
         total: memory.total,
-        total_gb: Math.round(memory.total / (1024 * 1024 * 1024) * 100) / 100,
         used: memory.used,
         free: memory.free,
         available: memory.available,
-        percent: Math.round(memory.usedPercent * 100) / 100,
+        percent: Math.round((memory.used / memory.total) * 10000) / 100,
         used_mb: Math.round(memory.used / (1024 * 1024)),
         available_mb: Math.round(memory.available / (1024 * 1024))
       },
@@ -263,23 +271,19 @@ async function getRealtimeMetrics() {
         temperature: gpuTemperature
       },
       
-      // Disk (simplified)
+      // Disk
       disk: {
-        read_bytes: diskIO ? diskIO.rIO_sec : 0,
-        write_bytes: diskIO ? diskIO.wIO_sec : 0,
-        read_mbps: diskIO ? Math.round(diskIO.rIO_sec / (1024 * 1024) * 100) / 100 : 0,
-        write_mbps: diskIO ? Math.round(diskIO.wIO_sec / (1024 * 1024) * 100) / 100 : 0
+        read_mbps: Math.round(read_sec / (1024 * 1024) * 100) / 100,
+        write_mbps: Math.round(write_sec / (1024 * 1024) * 100) / 100
       },
       
-      // Network (simplified)
+      // Network
       network: {
-        rx_sec: networkIO ? networkIO.rx_sec : 0,
-        tx_sec: networkIO ? networkIO.tx_sec : 0,
-        rx_mbps: networkIO ? Math.round(networkIO.rx_sec / (1024 * 1024) * 100) / 100 : 0,
-        tx_mbps: networkIO ? Math.round(networkIO.tx_sec / (1024 * 1024) * 100) / 100 : 0
+        rx_mbps: Math.round(rx_sec / (1024 * 1024) * 100) / 100,
+        tx_mbps: Math.round(tx_sec / (1024 * 1024) * 100) / 100
       },
       
-      // Process list - Top 10 by CPU usage
+      // Process list
       top_processes: processes.list
         .sort((a, b) => b.cpu - a.cpu)
         .slice(0, 10)
