@@ -50,48 +50,24 @@ echo [OK] Node.js dependencies installed
 echo.
 
 echo Select mode:
-echo   1. Start Agent (device registration + heartbeat)
-echo   2. Start Monitor (real-time metrics)
-echo   3. Start Both (recommended)
-echo   4. Exit
+echo   1. Start Agent (device registration + heartbeat + monitor)
+echo   2. Exit
 echo.
 
-set /p choice="Enter option (1/2/3/4): "
+set /p choice="Enter option (1/2): "
 
 if "%choice%"=="1" (
     echo.
     echo Starting Hardware Agent...
     python "%~dp0hardware_agent.py" --server http://localhost:8000
     echo.
+    echo Agent exited.
     echo Press any key to exit...
     pause >nul
     exit /b 0
 )
 
 if "%choice%"=="2" (
-    echo.
-    echo Starting Hardware Monitor...
-    python "%~dp0hardware_monitor.py"
-    echo.
-    echo Press any key to exit...
-    pause >nul
-    exit /b 0
-)
-
-if "%choice%"=="3" (
-    echo.
-    echo Starting Agent + Monitor (dual window mode)
-    echo Server: http://localhost:8000
-    echo.
-    echo [Window 1] Hardware Agent
-    echo [Window 2] Hardware Monitor
-    echo.
-    start "Hardware Monitor" cmd /k "cd /d "%~dp0" && python hardware_monitor.py"
-    python "%~dp0hardware_agent.py" --server http://localhost:8000
-    exit /b 0
-)
-
-if "%choice%"=="4" (
     exit /b 0
 )
 

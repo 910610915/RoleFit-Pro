@@ -156,7 +156,7 @@ async function getHardwareInfo() {
 /**
  * Get GPU metrics from nvidia-smi (fallback when systeminformation fails)
  */
-async function getNvidiaGpuMetrics() {
+function getNvidiaGpuMetrics() {
   return new Promise((resolve) => {
     const { exec } = require('child_process');
     exec('nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits', 
@@ -167,20 +167,102 @@ async function getNvidiaGpuMetrics() {
           return;
         }
         
-        const parts = stdout.trim().split(',').map(s => parseFloat(s.trim()));
-        if (parts.length >= 5 && !isNaN(parts[0])) {
-          resolve({
-            percent: parts[0],
-            memory_percent: parts[1],
-            memory_used_mb: parts[2],
-            memory_total_mb: parts[3],
-            temperature: parts[4]
-          });
-        } else {
+        try {
+          const parts = stdout.trim().split(',').map(s => parseFloat(s.trim()));
+          if (parts.length >= 5 && !isNaN(parts[0])) {
+            resolve({
+              percent: parts[0],
+              memory_percent: parts[1],
+              memory_used_mb: parts[2],
+              memory_total_mb: parts[3],
+              temperature: parts[4]
+            });
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
           resolve(null);
         }
       }
     );
+  });
+}
+
+function getDiskCounters() {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    // Counters: Queue Length, Latency (sec/Transfer), Read Bytes/sec, Write Bytes/sec
+    const cmd = 'typeperf "\\PhysicalDisk(*)\\Current Disk Queue Length" "\\PhysicalDisk(*)\\Avg. Disk sec/Transfer" "\\PhysicalDisk(*)\\Disk Read Bytes/sec" "\\PhysicalDisk(*)\\Disk Write Bytes/sec" -sc 1';
+    
+    exec(cmd, { timeout: 5000 }, (error, stdout, stderr) => {
+      if (error || !stdout) {
+        resolve([]);
+        return;
+      }
+
+      try {
+        const lines = stdout.trim().split('\n');
+        // Find header line (starts with "(PDH-CSV")
+        let headerIndex = -1;
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith('"(PDH-CSV')) {
+            headerIndex = i;
+            break;
+          }
+        }
+
+        if (headerIndex === -1 || headerIndex + 1 >= lines.length) {
+          resolve([]);
+          return;
+        }
+
+        // Parse header to map columns
+        const headerLine = lines[headerIndex];
+        const valueLine = lines[headerIndex + 1];
+        
+        // Split by comma, handling quotes
+        const headers = headerLine.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g).map(s => s.replace(/^"|"$/g, ''));
+        const values = valueLine.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g).map(s => s.replace(/^"|"$/g, ''));
+
+        const diskMap = {};
+
+        // Start from index 1 (0 is timestamp)
+        for (let i = 1; i < headers.length; i++) {
+          const header = headers[i];
+          const value = parseFloat(values[i]);
+          
+          if (isNaN(value)) continue;
+
+          // Parse header: \\Hostname\PhysicalDisk(Instance)\Counter
+          const match = header.match(/\\PhysicalDisk\((.*?)\)\\(.*)/);
+          if (match) {
+            const instance = match[1]; // e.g. "0 C:" or "_Total"
+            const counter = match[2]; // e.g. "Current Disk Queue Length"
+
+            if (!diskMap[instance]) {
+              diskMap[instance] = { name: instance };
+            }
+
+            if (counter.includes('Queue Length')) {
+              diskMap[instance].queue_length = value;
+            } else if (counter.includes('sec/Transfer')) {
+              diskMap[instance].latency_ms = value * 1000; // Convert sec to ms
+            } else if (counter.includes('Read Bytes/sec')) {
+              diskMap[instance].read_bytes_sec = value;
+            } else if (counter.includes('Write Bytes/sec')) {
+              diskMap[instance].write_bytes_sec = value;
+            }
+          }
+        }
+
+        // Convert map to array
+        const result = Object.values(diskMap);
+        resolve(result);
+
+      } catch (e) {
+        resolve([]);
+      }
+    });
   });
 }
 
@@ -194,7 +276,14 @@ async function getRealtimeMetrics() {
     const diskIO = await si.disksIO();
     const networkStats = await si.networkStats();
     
+    // Get detailed disk counters (Windows only)
+    let diskDetails = [];
+    if (process.platform === 'win32') {
+        diskDetails = await getDiskCounters();
+    }
+    
     // Get processes separately as it can be heavy
+
     let processes = { list: [] };
     try {
       // Limit to top 20 processes to save time
@@ -209,6 +298,7 @@ async function getRealtimeMetrics() {
     let gpuMemoryTotal = 0;
     let gpuTemperature = 0;
 
+    // Try to get from systeminformation first
     if (graphics.controllers && graphics.controllers.length > 0) {
       const gpu = graphics.controllers[0];
       gpuPercent = gpu.utilizationGpu || 0;
@@ -222,27 +312,50 @@ async function getRealtimeMetrics() {
       }
     }
 
+    // If si failed to get usage (which is common on Windows), try nvidia-smi
+    if (gpuPercent === 0) {
+      const nvidiaMetrics = await getNvidiaGpuMetrics();
+      if (nvidiaMetrics) {
+        gpuPercent = nvidiaMetrics.percent;
+        gpuTemperature = nvidiaMetrics.temperature;
+        gpuMemoryUsed = nvidiaMetrics.memory_used_mb;
+        gpuMemoryTotal = nvidiaMetrics.memory_total_mb;
+      }
+    }
+
     // Disk IO (aggregate all disks)
-    let read_sec = 0;
-    let write_sec = 0;
+    // We return TOTAL bytes here, and let the Python agent calculate the rate
+    let read_bytes = 0;
+    let write_bytes = 0;
     
     if (diskIO) {
-        read_sec = diskIO.rIO_sec || 0;
-        write_sec = diskIO.wIO_sec || 0;
+        read_bytes = diskIO.rIO || 0;
+        write_bytes = diskIO.wIO || 0;
+    } else {
+        // Fallback: try fsStats if disksIO fails (sometimes better on Windows)
+        try {
+            const fsStats = await si.fsStats();
+            if (fsStats) {
+                read_bytes = fsStats.rx || 0;
+                write_bytes = fsStats.wx || 0;
+            }
+        } catch (e) {
+            // Ignore
+        }
     }
 
     // Network (aggregate all interfaces)
-    let rx_sec = 0;
-    let tx_sec = 0;
+    let rx_bytes = 0;
+    let tx_bytes = 0;
     
     if (networkStats && Array.isArray(networkStats)) {
         for (const iface of networkStats) {
-            rx_sec += iface.rx_sec || 0;
-            tx_sec += iface.tx_sec || 0;
+            rx_bytes += iface.rx_bytes || 0;
+            tx_bytes += iface.tx_bytes || 0;
         }
     } else if (networkStats) {
-        rx_sec = networkStats.rx_sec || 0;
-        tx_sec = networkStats.tx_sec || 0;
+        rx_bytes = networkStats.rx_bytes || 0;
+        tx_bytes = networkStats.tx_bytes || 0;
     }
 
     const result = {
@@ -271,19 +384,21 @@ async function getRealtimeMetrics() {
         temperature: gpuTemperature
       },
       
-      // Disk
+      // Disk (Raw counters)
       disk: {
-        read_mbps: Math.round(read_sec / (1024 * 1024) * 100) / 100,
-        write_mbps: Math.round(write_sec / (1024 * 1024) * 100) / 100
+        read_bytes: read_bytes,
+        write_bytes: write_bytes,
+        details: diskDetails
       },
       
-      // Network
+      // Network (Raw counters)
       network: {
-        rx_mbps: Math.round(rx_sec / (1024 * 1024) * 100) / 100,
-        tx_mbps: Math.round(tx_sec / (1024 * 1024) * 100) / 100
+        rx_bytes: rx_bytes,
+        tx_bytes: tx_bytes
       },
       
       // Process list
+
       top_processes: processes.list
         .sort((a, b) => b.cpu - a.cpu)
         .slice(0, 10)

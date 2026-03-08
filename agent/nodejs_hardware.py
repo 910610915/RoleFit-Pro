@@ -35,18 +35,27 @@ def run_node_script(args: list = None) -> Optional[Dict[str, Any]]:
 
     try:
         cmd = [NODE_EXE, NODE_SCRIPT] + args
+        # logger.debug(f"Running Node.js command: {' '.join(cmd)}")
+        
+        # Increase timeout to 60 seconds for slower machines
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
             cwd=NODE_SCRIPT_DIR,
             encoding="utf-8",
             errors="replace",
         )
 
         if result.returncode != 0:
-            logger.error(f"Node.js script error: {result.stderr}")
+            logger.error(f"Node.js script error (code {result.returncode}): {result.stderr}")
+            # Try to parse stdout even if return code is non-zero, sometimes partial json is printed
+            if not result.stdout.strip():
+                return None
+        
+        if not result.stdout:
+            logger.error("Node.js script returned empty stdout")
             return None
 
         # 修复Windows路径中的反斜杠问题
@@ -149,34 +158,40 @@ def get_realtime_metrics() -> Dict[str, Any]:
     result = run_node_script(["metrics"])
 
     if not result or not result.get("success"):
+        # Log the raw output if failed
+        if result and "error" in result:
+            logger.error(f"Node.js script failed: {result.get('error')}")
         error_msg = result.get("error", "Unknown error") if result else "No response"
         raise RuntimeError(f"Failed to get realtime metrics: {error_msg}")
 
     data = result.get("data", {})
 
-    # 处理内存百分比（systeminformation有时返回null）
+    # Memory
     mem_data = data.get("memory", {})
+    mem_total = mem_data.get("total", 0) or 0
+    mem_used = mem_data.get("used", 0) or 0
+    mem_avail = mem_data.get("available", 0) or 0
+    
+    # Calculate percent if missing
     mem_percent = mem_data.get("percent")
-    if mem_percent is None:
-        # 手动计算内存百分比
-        mem_total = mem_data.get("total", 1)
-        mem_used = mem_data.get("used", 0)
-        mem_percent = round((mem_used / mem_total) * 100, 2) if mem_total > 0 else 0
-
+    if mem_percent is None and mem_total > 0:
+        mem_percent = round((mem_used / mem_total) * 100, 2)
+        
     metrics = {
         "cpu_percent": data.get("cpu", {}).get("percent", 0),
         "cpu_frequency_mhz": data.get("cpu", {}).get("speed", 0),
         "memory_percent": mem_percent,
-        "memory_used_mb": mem_data.get("used_mb", 0),
-        "memory_available_mb": mem_data.get("available_mb", 0),
+        "memory_used_mb": round(mem_used / 1024 / 1024, 2),
+        "memory_available_mb": round(mem_avail / 1024 / 1024, 2),
         "gpu_percent": data.get("gpu", {}).get("percent"),
         "gpu_temperature": data.get("gpu", {}).get("temperature"),
         "gpu_memory_used_mb": data.get("gpu", {}).get("memory_used_mb"),
         "gpu_memory_total_mb": data.get("gpu", {}).get("memory_total_mb"),
-        "disk_read_mbps": data.get("disk", {}).get("read_mbps", 0),
-        "disk_write_mbps": data.get("disk", {}).get("write_mbps", 0),
-        "network_sent_mbps": data.get("network", {}).get("tx_mbps", 0),
-        "network_recv_mbps": data.get("network", {}).get("rx_mbps", 0),
+        "disk_read_bytes": data.get("disk", {}).get("read_bytes", 0),
+        "disk_write_bytes": data.get("disk", {}).get("write_bytes", 0),
+        "disk_io_details": data.get("disk", {}).get("details", []),
+        "network_sent_bytes": data.get("network", {}).get("tx_bytes", 0),
+        "network_recv_bytes": data.get("network", {}).get("rx_bytes", 0),
         "top_processes": data.get("top_processes", []),
     }
 

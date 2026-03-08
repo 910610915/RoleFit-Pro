@@ -29,8 +29,8 @@ except ImportError:
 # Configuration
 SERVER_URL = "http://localhost:8000"
 DEVICE_ID = None  # Will be loaded from file or registered
-METRICS_INTERVAL = 5  # seconds between metric collections
-BATCH_SIZE = 10  # send metrics in batches
+METRICS_INTERVAL = 1  # seconds between metric collections
+BATCH_SIZE = 1  # send metrics in batches
 
 # Configure logging
 logging.basicConfig(
@@ -123,27 +123,95 @@ def register_device() -> Optional[str]:
 class PerformanceMonitor:
     """Collect and report real-time performance metrics using Node.js systeminformation"""
 
-    def __init__(self, device_id: str):
+    def __init__(self, device_id: str, server_url: str = "http://localhost:8000", api_key: Optional[str] = None):
         self.device_id = device_id
+        self.server_url = server_url.rstrip("/")
+        self.api_key = api_key
         self.metrics_buffer = []
         self.running = True
+        
+        # State for rate calculation
+        self.last_timestamp = 0
+        self.last_disk_read = 0
+        self.last_disk_write = 0
+        self.last_net_sent = 0
+        self.last_net_recv = 0
 
     def collect_metrics(self) -> Dict[str, Any]:
         """Collect current performance metrics from Node.js"""
         try:
             # Get metrics from Node.js
             metrics = get_metrics_nodejs()
+            
+            if not metrics:
+                logger.warning("No metrics returned from Node.js")
+                return {}
 
-            if metrics:
-                metrics["device_id"] = self.device_id
-                metrics["timestamp"] = datetime.utcnow().isoformat()
-                logger.debug(
-                    f"Metrics: CPU={metrics.get('cpu_percent')}%, Memory={metrics.get('memory_percent')}%"
-                )
-                return metrics
+            # Calculate rates
+            current_time = time.time()
+            
+            if self.last_timestamp > 0:
+                time_diff = current_time - self.last_timestamp
+                # Avoid division by zero
+                if time_diff < 0.1: time_diff = 0.1
+                
+                # Disk MB/s
+                read_diff = metrics.get("disk_read_bytes", 0) - self.last_disk_read
+                write_diff = metrics.get("disk_write_bytes", 0) - self.last_disk_write
+                
+                # Handle counter reset/overflow
+                if read_diff < 0: read_diff = 0
+                if write_diff < 0: write_diff = 0
+                
+                metrics["disk_read_mbps"] = round(read_diff / time_diff / (1024*1024), 2)
+                metrics["disk_write_mbps"] = round(write_diff / time_diff / (1024*1024), 2)
+                
+                # Network MB/s
+                sent_diff = metrics.get("network_sent_bytes", 0) - self.last_net_sent
+                recv_diff = metrics.get("network_recv_bytes", 0) - self.last_net_recv
+                
+                if sent_diff < 0: sent_diff = 0
+                if recv_diff < 0: recv_diff = 0
+                
+                metrics["network_sent_mbps"] = round(sent_diff / time_diff / (1024*1024), 2)
+                metrics["network_recv_mbps"] = round(recv_diff / time_diff / (1024*1024), 2)
+            else:
+                # First run - set to 0
+                metrics["disk_read_mbps"] = 0
+                metrics["disk_write_mbps"] = 0
+                metrics["network_sent_mbps"] = 0
+                metrics["network_recv_mbps"] = 0
+                
+            # Update state
+            self.last_timestamp = current_time
+            self.last_disk_read = metrics.get("disk_read_bytes", 0)
+            self.last_disk_write = metrics.get("disk_write_bytes", 0)
+            self.last_net_sent = metrics.get("network_sent_bytes", 0)
+            self.last_net_recv = metrics.get("network_recv_bytes", 0)
 
-            logger.warning("No metrics returned from Node.js")
-            return {}
+            # Pass through the raw details directly from Node.js
+            # These are already per-disk objects: { name: "0 C:", queue_length: 0, ... }
+            metrics["disk_io_details"] = metrics.get("disk_io_details", [])
+
+            metrics["device_id"] = self.device_id
+            metrics["timestamp"] = datetime.utcnow().isoformat()
+
+            
+            # Ensure critical fields exist and are numbers
+            metrics['memory_used_mb'] = metrics.get('memory_used_mb') or 0
+            metrics['memory_available_mb'] = metrics.get('memory_available_mb') or 0
+            
+            used = metrics['memory_used_mb']
+            avail = metrics['memory_available_mb']
+            total = used + avail
+            
+            if 'memory_percent' not in metrics or metrics['memory_percent'] is None:
+                if total > 0:
+                    metrics['memory_percent'] = round((used / total) * 100, 1)
+                else:
+                    metrics['memory_percent'] = 0
+            
+            return metrics
 
         except Exception as e:
             logger.error(f"Failed to collect metrics: {e}")
@@ -152,10 +220,16 @@ class PerformanceMonitor:
     def send_metrics_batch(self, metrics_list: List[Dict[str, Any]]) -> bool:
         """Send batch metrics to server"""
         try:
-            url = f"{SERVER_URL}/api/performance/metrics/batch"
+            url = f"{self.server_url}/api/performance/metrics/batch"
+            
+            headers = {}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+                
             response = requests.post(
                 url,
                 json={"device_id": self.device_id, "metrics": metrics_list},
+                headers=headers,
                 timeout=30,
             )
             return response.status_code in [200, 201]
@@ -215,7 +289,7 @@ def main():
         return
 
     # Start monitoring
-    monitor = PerformanceMonitor(DEVICE_ID)
+    monitor = PerformanceMonitor(DEVICE_ID, SERVER_URL)
 
     try:
         monitor.run()

@@ -67,6 +67,17 @@ class HardwareBenchmarkAgent:
             logger.warning("Script executor not available")
             self.script_executor = None
 
+        # Import Performance Monitor
+        try:
+            from hardware_monitor import PerformanceMonitor
+            self.PerformanceMonitor = PerformanceMonitor
+        except ImportError:
+            logger.warning("Performance Monitor not available")
+            self.PerformanceMonitor = None
+            
+        self.monitor = None
+        self.monitor_thread = None
+
     def load_device_id(self) -> Optional[str]:
         """Load device ID from file"""
         try:
@@ -255,13 +266,170 @@ class HardwareBenchmarkAgent:
 
             if response.status_code == 200:
                 tasks = response.json()
-                if tasks:
+                if tasks and isinstance(tasks, list):
                     return tasks[0]
+                elif tasks and isinstance(tasks, dict) and "items" in tasks:
+                    # Handle paginated response
+                    if tasks["items"]:
+                        return tasks["items"][0]
 
         except Exception as e:
             logger.error(f"Failed to poll tasks: {e}")
 
         return None
+
+    def poll_control_commands(self):
+        """Poll for pending control commands"""
+        if not self.device_id:
+            return None
+
+        try:
+            url = f"{self.server_url}/api/performance/commands/pending?device_id={self.device_id}"
+
+            headers = {}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                # Handle paginated response
+                if isinstance(data, dict) and "items" in data:
+                    commands = data["items"]
+                    if commands:
+                        return commands[0]
+                # Handle list response (fallback)
+                elif isinstance(data, list) and data:
+                    return data[0]
+
+        except Exception as e:
+            logger.error(f"Failed to poll control commands: {e}")
+
+        return None
+
+    def execute_control_command(self, command: dict):
+        """Execute a control command"""
+        import subprocess
+        import os
+
+        command_id = command.get("id")
+        command_type = command.get("command_type")
+
+        logger.info(f"Executing control command: {command_type} (ID: {command_id})")
+
+        try:
+            # Update command status to executing
+            self._update_command_status(command_id, "executing")
+
+            result = None
+            error_message = None
+
+            if command_type == "shutdown":
+                # Windows shutdown command
+                subprocess.run(
+                    ["shutdown", "/s", "/t", "60", "/c", "Remote shutdown initiated"],
+                    capture_output=True,
+                    timeout=10,
+                )
+                result = "Shutdown command sent (60 second delay)"
+
+            elif command_type == "restart":
+                # Windows restart command
+                subprocess.run(
+                    ["shutdown", "/r", "/t", "60", "/c", "Remote restart initiated"],
+                    capture_output=True,
+                    timeout=10,
+                )
+                result = "Restart command sent (60 second delay)"
+
+            elif command_type == "lock":
+                # Lock workstation
+                subprocess.run(
+                    ["rundll32.exe", "user32.dll,LockWorkStation"],
+                    capture_output=True,
+                    timeout=10,
+                )
+                result = "Workstation locked"
+
+            elif command_type == "unlock":
+                # Note: Cannot programmatically unlock
+                error_message = "Cannot remotely unlock - requires physical interaction"
+                logger.warning(error_message)
+
+            elif command_type == "execute":
+                # Execute custom command
+                import json
+
+                params = json.loads(command.get("command_params", "{}"))
+                cmd = params.get("command", "")
+                if cmd:
+                    proc = subprocess.run(
+                        cmd, shell=True, capture_output=True, timeout=300
+                    )
+                    result = (
+                        proc.stdout.decode("utf-8", errors="ignore")[:1000]
+                        if proc.stdout
+                        else ""
+                    )
+                    if proc.returncode != 0:
+                        error_message = proc.stderr.decode("utf-8", errors="ignore")[
+                            :500
+                        ]
+                else:
+                    error_message = "No command specified"
+
+            else:
+                error_message = f"Unknown command type: {command_type}"
+
+            # Update command status
+            if error_message:
+                self._update_command_status(
+                    command_id, "failed", error_message=error_message
+                )
+            else:
+                self._update_command_status(command_id, "completed", result=result)
+
+        except subprocess.TimeoutExpired:
+            self._update_command_status(
+                command_id, "failed", error_message="Command timeout"
+            )
+        except Exception as e:
+            logger.error(f"Failed to execute command: {e}")
+            self._update_command_status(command_id, "failed", error_message=str(e))
+
+    def _update_command_status(
+        self,
+        command_id: str,
+        status: str,
+        result: str = None,
+        error_message: str = None,
+    ):
+        """Update command status on server"""
+        try:
+            import json
+
+            url = f"{self.server_url}/api/performance/commands/{command_id}/complete"
+            if status == "executing":
+                url = f"{self.server_url}/api/performance/commands/{command_id}/acknowledge"
+
+            headers = {"Content-Type": "application/json"}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+
+            payload = {}
+            if status == "completed":
+                if result:
+                    payload["result"] = result
+            elif status == "failed":
+                if error_message:
+                    payload["error_message"] = error_message
+
+            requests.post(url, json=payload, headers=headers, timeout=10)
+            logger.info(f"Command {command_id} status updated to: {status}")
+
+        except Exception as e:
+            logger.error(f"Failed to update command status: {e}")
 
     def run(self):
         """Main agent loop"""
@@ -283,6 +451,17 @@ class HardwareBenchmarkAgent:
         # Send initial heartbeat
         self.send_heartbeat(status="online")
 
+        # Start performance monitor
+        if self.PerformanceMonitor and self.device_id:
+            logger.info("Starting performance monitor...")
+            try:
+                self.monitor = self.PerformanceMonitor(self.device_id, self.server_url, self.api_key)
+                self.monitor_thread = threading.Thread(target=self.monitor.run)
+                self.monitor_thread.daemon = True
+                self.monitor_thread.start()
+            except Exception as e:
+                logger.error(f"Failed to start performance monitor: {e}")
+
         # Main loop
         while self.running:
             try:
@@ -298,6 +477,15 @@ class HardwareBenchmarkAgent:
                         logger.info(f"Received task: {task.get('id')}")
                         # Process task (simplified - actual implementation would handle different task types)
 
+                # Poll for control commands (only if not busy)
+                if not self.current_task_id:
+                    control_cmd = self.poll_control_commands()
+                    if control_cmd:
+                        logger.info(
+                            f"Received control command: {control_cmd.get('command_type')}"
+                        )
+                        self.execute_control_command(control_cmd)
+
                 # Sleep before next iteration
                 for _ in range(self.task_poll_interval):
                     if not self.running:
@@ -310,6 +498,13 @@ class HardwareBenchmarkAgent:
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
                 time.sleep(10)
+
+        # Stop performance monitor
+        if self.monitor:
+            logger.info("Stopping performance monitor...")
+            self.monitor.stop()
+            if self.monitor_thread and self.monitor_thread.is_alive():
+                self.monitor_thread.join(timeout=5)
 
         # Send offline status before exit
         self.send_heartbeat(status="offline")
