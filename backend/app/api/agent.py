@@ -33,6 +33,7 @@ async def agent_chat(
     provider: Optional[str] = Body(None, embed=True),
     api_key: Optional[str] = Body(None, embed=True),
     model: Optional[str] = Body(None, embed=True),
+    base_url: Optional[str] = Body(None, embed=True),
     db: Session = Depends(get_db_sync)
 ):
     """
@@ -41,16 +42,17 @@ async def agent_chat(
     接收用户消息，自动调用工具查询数据，并返回 AI 回复。
     支持前端传递 provider/api_key/model 配置。
     """
-    service = AgentService(db, provider=provider)
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Agent Chat Request: provider={provider}, model={model}, base_url={base_url}")
     
-    # 如果前端传了 api_key 或 model，临时覆盖 service 中的配置
-    if api_key:
-        service.llm.api_key = api_key
-        # 重新初始化 client 以应用新的 key
-        service.llm.client.api_key = api_key
-        
-    if model:
-        service.llm.default_model = model
+    service = AgentService(
+        db, 
+        provider=provider, 
+        api_key=api_key,
+        model=model,
+        base_url=base_url
+    )
         
     return service.chat(message, history)
 

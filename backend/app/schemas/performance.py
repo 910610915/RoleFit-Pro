@@ -305,9 +305,6 @@ class AIAnalysisReportListResponse(BaseModel):
     items: List[AIAnalysisReportResponse]
 
 
-
-
-
 class BenchmarkStartRequest(BaseModel):
     """开始基准测试请求"""
 
@@ -358,6 +355,25 @@ class AIAnalysisRequest(BaseModel):
     title: Optional[str] = None
     metrics_period_hours: int = 24  # 分析最近多少小时的数据
     include_benchmarks: bool = True
+    
+    # Dynamic Credentials
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    provider: Optional[str] = None
+
+
+class AIAnalysisMetricsRequest(BaseModel):
+    """AI实时指标分析请求"""
+    
+    device_id: str
+    seconds: int = 60
+    
+    # Dynamic Credentials
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class AIAnalysisResponse(BaseModel):

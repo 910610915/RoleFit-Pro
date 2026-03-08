@@ -37,6 +37,7 @@ class LLMProvider:
                 "nvidia/llama-3.1-nemotron-70b-instruct-hf",
                 "google/gemma-2-27b-it",
                 "mistralai/mixtral-8x7b-instruct-v0.1",
+                "deepseek-ai/deepseek-r1",
             ]
         },
         "siliconflow": {
@@ -106,15 +107,29 @@ class LLMProvider:
                 "gpt-3.5-turbo",
             ]
         },
+        "openrouter": {
+            "name": "OpenRouter",
+            "base_url": "https://openrouter.ai/api/v1",
+            "default_model": "deepseek/deepseek-chat",
+            "free": False,
+            "models": [
+                "deepseek/deepseek-chat",
+                "deepseek/deepseek-r1",
+                "openai/gpt-4o",
+                "anthropic/claude-3.5-sonnet",
+            ]
+        },
     }
     
-    def __init__(self, provider: str = "siliconflow", api_key: Optional[str] = None):
+    def __init__(self, provider: str = "siliconflow", api_key: Optional[str] = None, base_url: Optional[str] = None, model: Optional[str] = None):
         """
         初始化 LLM 提供商
         
         Args:
             provider: 提供商名称 (siliconflow/minimax/deepseek/zhipu/qwen/openai/nvidia/custom/local_ollama)
             api_key: API Key，如果不提供则使用配置中的默认 Key
+            base_url: 自定义 Base URL (可选)
+            model: 自定义模型名称 (可选)
         """
         self.provider = provider
         
@@ -150,9 +165,11 @@ class LLMProvider:
         else:
             provider_config = self.PROVIDERS.get(provider)
         
-        self.base_url = provider_config["base_url"]
-        # 优先使用 settings 中的模型配置
-        self.default_model = settings.llm_model if settings.llm_model else provider_config["default_model"]
+        # 优先使用传入的 base_url，其次是 provider 配置
+        self.base_url = base_url or provider_config["base_url"]
+        
+        # 优先使用传入的模型，其次是 settings 中的，最后是 provider 默认
+        self.default_model = model or settings.llm_model or provider_config["default_model"]
         self.name = provider_config["name"]
         
         # 使用提供的 API Key 或配置中的

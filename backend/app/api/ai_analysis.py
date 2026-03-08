@@ -14,8 +14,9 @@ from app.models.sqlite import (
     AIAnalysisReport,
     PositionStandard,
 )
-from app.schemas.performance import AIAnalysisRequest, AIAnalysisResponse
+from app.schemas.performance import AIAnalysisRequest, AIAnalysisResponse, AIAnalysisMetricsRequest
 from app.services.ai_analysis_service import AIAnalysisService
+from app.services.llm_service import LLMProvider
 
 router = APIRouter(prefix="/ai", tags=["AI Analysis"])
 
@@ -44,7 +45,17 @@ def analyze_general(
     """
     通用 AI 分析接口 - 支持自然语言查询
     """
-    analysis_service = AIAnalysisService()
+    # 初始化 LLM Provider
+    llm_provider = None
+    if request.api_key:
+        llm_provider = LLMProvider(
+            provider=request.provider,
+            api_key=request.api_key,
+            model=request.model,
+            base_url=request.base_url
+        )
+
+    analysis_service = AIAnalysisService(llm_client=llm_provider)
 
     # 获取用户查询
     query = request.query
@@ -115,21 +126,24 @@ def analyze_general(
             "device_id": request.device_id or "",
             "analysis_type": request.analysis_type or "general",
             "title": f"AI 分析 - {query[:30]}",
+            "report_id": f"adhoc-{int(time.time())}"
         }
 
     except Exception as e:
-        return {"status": "error", "summary": f"分析失败：{str(e)}"}
+        return {"status": "error", "summary": f"分析失败：{str(e)}", "report_id": "error", "title": "Error"}
 
 
 @router.post("/analyze/metrics", response_model=AIAnalysisResponse)
 def analyze_realtime_metrics(
-    device_id: str,
-    seconds: int = Query(60, ge=10, le=3600, description="分析最近N秒的数据"),
+    request: AIAnalysisMetricsRequest,
     db: Session = Depends(get_db_sync),
 ):
     """
     分析设备实时性能指标
     """
+    device_id = request.device_id
+    seconds = request.seconds
+
     # 获取设备信息
     device_result = db.execute(select(Device).where(Device.id == device_id))
     device = device_result.scalar_one_or_none()
@@ -165,8 +179,18 @@ def analyze_realtime_metrics(
             }
         )
 
+    # 初始化 LLM Provider
+    llm_provider = None
+    if request.api_key:
+        llm_provider = LLMProvider(
+            provider=request.provider,
+            api_key=request.api_key,
+            model=request.model,
+            base_url=request.base_url
+        )
+    
     # 调用 AI 分析服务
-    analysis_service = AIAnalysisService()
+    analysis_service = AIAnalysisService(llm_client=llm_provider)
     device_info = device_to_info(device)
     result = analysis_service.analyze_realtime_metrics(device_info, metrics_data)
 

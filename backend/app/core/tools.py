@@ -4,18 +4,66 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 
-from app.models.sqlite import Device, TestTask, TestResult, TestSoftware, JobScript
+from app.models.sqlite import Device, TestTask, TestResult, TestSoftware, JobScript, SoftwareMetrics
 from app.schemas.device import DeviceResponse
 from app.schemas.task import TestTaskResponse as TaskResponse
 from app.schemas.result import TestResultResponse as ResultResponse
 
-def get_devices(db: Session, status: Optional[str] = None, gpu_model: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+def get_device_metrics(db: Session, device_name: str, limit: int = 10) -> List[Dict[str, Any]]:
     """
-    查询设备列表，支持按状态、显卡型号筛选
+    查询设备最近的性能监控数据 (CPU/GPU/内存占用率)
+    
+    Args:
+        device_name: 设备名称关键词 (必填)
+        limit: 返回最近的数据点数量，默认10
+    """
+    # 先找到设备
+    from sqlalchemy import or_
+    device_query = select(Device).where(or_(
+        Device.device_name.ilike(f"%{device_name}%"),
+        Device.hostname.ilike(f"%{device_name}%")
+    ))
+    device = db.execute(device_query).scalars().first()
+    
+    if not device:
+        return [{"error": f"未找到名为 '{device_name}' 的设备"}]
+        
+    # 查询 metrics 表，关联 execution 找到属于该设备的 metrics
+    # 注意：metrics 表关联的是 execution_id，需要先找到属于该设备的 execution
+    # 或者如果 metrics 直接关联 device_id 最好，但目前模型里只有 execution_id
+    # 我们可以通过 join ScriptExecution 来查
+    from app.models.sqlite import ScriptExecution
+    
+    query = select(SoftwareMetrics).join(ScriptExecution).where(
+        ScriptExecution.device_id == device.id
+    ).order_by(desc(SoftwareMetrics.timestamp)).limit(limit)
+    
+    metrics = db.execute(query).scalars().all()
+    
+    if not metrics:
+        return [{"message": f"设备 '{device.device_name}' 暂无监控数据"}]
+        
+    return [
+        {
+            "time": m.timestamp.strftime("%H:%M:%S"),
+            "software": m.software_name,
+            "cpu_load": f"{m.cpu_percent}%",
+            "gpu_load": f"{m.gpu_percent}%",
+            "ram_usage": f"{m.memory_mb}MB",
+            "gpu_ram": f"{m.gpu_memory_mb}MB",
+            "fps": m.fps
+        }
+        for m in metrics
+    ]
+
+def get_devices(db: Session, status: Optional[str] = None, gpu_model: Optional[str] = None, keyword: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    查询设备列表，支持按状态、显卡型号、名称关键词筛选
     
     Args:
         status: 设备状态 (online/offline/busy/idle)
         gpu_model: 显卡型号关键词 (如 "4090", "3080")
+        keyword: 设备名称或主机名关键词
         limit: 返回数量限制
     """
     query = select(Device)
@@ -25,6 +73,14 @@ def get_devices(db: Session, status: Optional[str] = None, gpu_model: Optional[s
         
     if gpu_model:
         query = query.where(Device.gpu_model.ilike(f"%{gpu_model}%"))
+        
+    if keyword:
+        # 同时匹配设备名和主机名
+        from sqlalchemy import or_
+        query = query.where(or_(
+            Device.device_name.ilike(f"%{keyword}%"),
+            Device.hostname.ilike(f"%{keyword}%")
+        ))
         
     query = query.limit(limit)
     devices = db.execute(query).scalars().all()
@@ -127,8 +183,29 @@ TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
+            "name": "get_device_metrics",
+            "description": "查询设备的实时性能监控数据（CPU/GPU/内存占用率等），用于分析性能瓶颈。例如：'看看xx电脑的性能监控'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "device_name": {
+                        "type": "string",
+                        "description": "设备名称关键词，如 '俊爷'"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "返回最近的数据点数量，默认10"
+                    }
+                },
+                "required": ["device_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_devices",
-            "description": "查询设备列表，可以查看在线状态、硬件配置（CPU/GPU/内存）等信息",
+            "description": "查询设备列表，可以查看在线状态、硬件配置（CPU/GPU/内存）等信息。如果用户提到具体的设备名（如'俊爷的电脑'），请使用keyword参数进行搜索。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -140,6 +217,10 @@ TOOLS_SCHEMA = [
                     "gpu_model": {
                         "type": "string",
                         "description": "显卡型号关键词，如 '4090', '3080'"
+                    },
+                    "keyword": {
+                        "type": "string",
+                        "description": "设备名称或主机名关键词，如 '俊爷的电脑', 'PC-001'"
                     },
                     "limit": {
                         "type": "integer",
@@ -218,5 +299,6 @@ AVAILABLE_TOOLS = {
     "get_devices": get_devices,
     "get_tasks": get_tasks,
     "get_results": get_results,
-    "list_software": list_software
+    "list_software": list_software,
+    "get_device_metrics": get_device_metrics
 }

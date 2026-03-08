@@ -68,7 +68,7 @@ def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
     import json
 
     data = metric
-    
+
     # 构建模型数据
     db_metric = PerformanceMetric(
         device_id=data.device_id,
@@ -94,15 +94,19 @@ def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
         process_count=data.process_count,
         top_processes=json.dumps(data.top_processes) if data.top_processes else None,
         raw_data=data.raw_data,
-        disk_io_details=json.dumps(data.disk_io_details) if data.disk_io_details else None,
+        disk_io_details=json.dumps(data.disk_io_details)
+        if data.disk_io_details
+        else None,
     )
-    
+
     db.add(db_metric)
     db.commit()
     db.refresh(db_metric)
 
     # 手动构建响应字典，因为 top_processes 和 disk_io_details 在数据库中是 JSON 字符串
-    metric_dict = {c.name: getattr(db_metric, c.name) for c in db_metric.__table__.columns}
+    metric_dict = {
+        c.name: getattr(db_metric, c.name) for c in db_metric.__table__.columns
+    }
 
     # 解析 JSON 字段
     if metric_dict.get("top_processes"):
@@ -110,13 +114,13 @@ def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
             metric_dict["top_processes"] = json.loads(metric_dict["top_processes"])
         except:
             metric_dict["top_processes"] = None
-            
+
     if metric_dict.get("disk_io_details"):
         try:
             metric_dict["disk_io_details"] = json.loads(metric_dict["disk_io_details"])
         except:
             metric_dict["disk_io_details"] = None
-            
+
     return metric_dict
 
 
@@ -255,7 +259,9 @@ def get_latest_metric(device_id: str, db: Session = Depends(get_db_sync)):
     if metric_dict.get("disk_io_details"):
         if isinstance(metric_dict["disk_io_details"], str):
             try:
-                metric_dict["disk_io_details"] = json.loads(metric_dict["disk_io_details"])
+                metric_dict["disk_io_details"] = json.loads(
+                    metric_dict["disk_io_details"]
+                )
             except:
                 metric_dict["disk_io_details"] = None
 
@@ -266,18 +272,32 @@ def get_latest_metric(device_id: str, db: Session = Depends(get_db_sync)):
 def get_realtime_metrics(
     device_id: str,
     seconds: int = Query(60, ge=10, le=3600),
+    start_time: Optional[datetime] = Query(None, description="开始时间 (ISO格式)"),
+    end_time: Optional[datetime] = Query(None, description="结束时间 (ISO格式)"),
     db: Session = Depends(get_db_sync),
 ):
-    """获取实时性能指标 (最近N秒)"""
+    """获取实时性能指标 (最近N秒) 或指定时间范围"""
     import json
 
-    since = datetime.utcnow() - timedelta(seconds=seconds)
-    result = db.execute(
-        select(PerformanceMetric)
-        .where(PerformanceMetric.device_id == device_id)
-        .where(PerformanceMetric.timestamp >= since)
-        .order_by(PerformanceMetric.timestamp.asc())
-    )
+    # 如果提供了日期范围参数，优先使用日期范围
+    if start_time and end_time:
+        # 日期范围查询
+        result = db.execute(
+            select(PerformanceMetric)
+            .where(PerformanceMetric.device_id == device_id)
+            .where(PerformanceMetric.timestamp >= start_time)
+            .where(PerformanceMetric.timestamp <= end_time)
+            .order_by(PerformanceMetric.timestamp.asc())
+        )
+    else:
+        # 使用默认的最近N秒
+        since = datetime.utcnow() - timedelta(seconds=seconds)
+        result = db.execute(
+            select(PerformanceMetric)
+            .where(PerformanceMetric.device_id == device_id)
+            .where(PerformanceMetric.timestamp >= since)
+            .order_by(PerformanceMetric.timestamp.asc())
+        )
     metrics = result.scalars().all()
 
     # Calculate averages
@@ -292,7 +312,7 @@ def get_realtime_metrics(
     metrics_data = []
     for m in metrics:
         m_dict = {c.name: getattr(m, c.name) for c in m.__table__.columns}
-        
+
         # Parse disk_io_details
         if m_dict.get("disk_io_details"):
             if isinstance(m_dict["disk_io_details"], str):
@@ -300,7 +320,7 @@ def get_realtime_metrics(
                     m_dict["disk_io_details"] = json.loads(m_dict["disk_io_details"])
                 except:
                     m_dict["disk_io_details"] = None
-        
+
         # Parse top_processes
         if m_dict.get("top_processes"):
             if isinstance(m_dict["top_processes"], str):
@@ -308,7 +328,7 @@ def get_realtime_metrics(
                     m_dict["top_processes"] = json.loads(m_dict["top_processes"])
                 except:
                     m_dict["top_processes"] = None
-                    
+
         metrics_data.append(m_dict)
 
     return {
