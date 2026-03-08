@@ -307,6 +307,19 @@ async def init_scheduler():
     """初始化并启动调度器"""
     await scheduler.start()
 
+    # 添加定时清理任务（每天凌晨3点执行）
+    from apscheduler.triggers.cron import CronTrigger
+    from app.services.data_retention_service import retention_service
+
+    scheduler._scheduler.add_job(
+        retention_service.run_cleanup,
+        trigger=CronTrigger(hour=3, minute=0),
+        id="daily_data_cleanup",
+        name="每日数据清理",
+        replace_existing=True,
+    )
+    logger.info("Added daily data cleanup job at 3:00 AM")
+
 
 async def stop_scheduler():
     """停止调度器"""

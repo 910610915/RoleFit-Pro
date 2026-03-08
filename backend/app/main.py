@@ -33,6 +33,11 @@ from app.api import (
     llm_config as llm_config_router,
     performance as performance_router,
     ai_analysis as ai_analysis_router,
+    data_retention as data_retention_router,
+    control as control_router,
+    audit_logs as audit_logs_router,
+    roles as roles_router,
+    third_party_apis as third_party_apis_router,
 )
 from app.api import websocket as websocket_router
 from app.api import scheduler as scheduler_router
@@ -68,7 +73,9 @@ app.include_router(positions_router.router, prefix="/api", tags=["Positions"])
 app.include_router(software_router.router, prefix="/api", tags=["Software"])
 app.include_router(scripts_router.router, prefix="/api", tags=["Scripts"])
 app.include_router(executions_router.router, prefix="/api", tags=["Executions"])
-app.include_router(agent_router.router, prefix="/api/agent", tags=["Agent"])  # Modified prefix to avoid conflict
+app.include_router(
+    agent_router.router, prefix="/api/agent", tags=["Agent"]
+)  # Modified prefix to avoid conflict
 app.include_router(alarms_router.router, prefix="/api", tags=["Alarms"])
 app.include_router(feature_cards_router.router, prefix="/api", tags=["Feature Cards"])
 app.include_router(database_router.router, prefix="/api", tags=["Database"])
@@ -76,6 +83,13 @@ app.include_router(llm_router.router, tags=["LLM"])
 app.include_router(llm_config_router.router, tags=["LLM Config"])
 app.include_router(performance_router.router, prefix="/api", tags=["Performance"])
 app.include_router(ai_analysis_router.router, prefix="/api", tags=["AI Analysis"])
+app.include_router(data_retention_router.router, prefix="/api", tags=["Data Retention"])
+app.include_router(control_router.router, prefix="/api", tags=["Remote Control"])
+app.include_router(audit_logs_router.router, prefix="/api", tags=["Audit Logs"])
+app.include_router(roles_router.router, prefix="/api", tags=["Roles & Permissions"])
+app.include_router(
+    third_party_apis_router.router, prefix="/api", tags=["Third Party APIs"]
+)
 app.include_router(websocket_router.router, tags=["WebSocket"])
 app.include_router(scheduler_router.router, prefix="/api", tags=["Scheduler"])
 
