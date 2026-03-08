@@ -121,18 +121,39 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>CPU 使用率趋势</h3>
-          <n-radio-group v-model:value="cpuTimeRange" size="small" @update:value="refreshCpuChart">
-            <n-radio-button value="1m">1分钟</n-radio-button>
-            <n-radio-button value="5m">5分钟</n-radio-button>
-            <n-radio-button value="15m">15分钟</n-radio-button>
-          </n-radio-group>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <n-select
+              v-model:value="selectedDate"
+              :options="dateOptions"
+              size="small"
+              style="width: 100px;"
+              @update:value="refreshCpuChart"
+            />
+            <n-radio-group v-model:value="cpuMetricType" size="small" @update:value="refreshCpuChart">
+              <n-radio-button value="usage">使用率</n-radio-button>
+              <n-radio-button value="frequency">频率</n-radio-button>
+              <n-radio-button value="temperature">温度</n-radio-button>
+            </n-radio-group>
+            <n-radio-group v-model:value="cpuTimeRange" size="small" @update:value="refreshCpuChart">
+              <n-radio-button value="1m">1分钟</n-radio-button>
+              <n-radio-button value="5m">5分钟</n-radio-button>
+              <n-radio-button value="15m">15分钟</n-radio-button>
+            </n-radio-group>
+          </div>
         </div>
         <div ref="cpuChartRef" style="height: 250px;"></div>
       </div>
       <div class="chart-card">
         <div class="chart-header">
           <h3>GPU 使用率趋势</h3>
-          <div style="display: flex; gap: 8px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <n-select
+              v-model:value="selectedDate"
+              :options="dateOptions"
+              size="small"
+              style="width: 100px;"
+              @update:value="refreshGpuChart"
+            />
             <n-radio-group v-model:value="gpuMetricType" size="small" @update:value="refreshGpuChart">
               <n-radio-button value="usage">使用率</n-radio-button>
               <n-radio-button value="memory">显存</n-radio-button>
@@ -153,11 +174,20 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>内存 使用率趋势</h3>
-          <n-radio-group v-model:value="memoryTimeRange" size="small" @update:value="refreshMemoryChart">
-            <n-radio-button value="1m">1分钟</n-radio-button>
-            <n-radio-button value="5m">5分钟</n-radio-button>
-            <n-radio-button value="15m">15分钟</n-radio-button>
-          </n-radio-group>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <n-select
+              v-model:value="selectedDate"
+              :options="dateOptions"
+              size="small"
+              style="width: 100px;"
+              @update:value="refreshMemoryChart"
+            />
+            <n-radio-group v-model:value="memoryTimeRange" size="small" @update:value="refreshMemoryChart">
+              <n-radio-button value="1m">1分钟</n-radio-button>
+              <n-radio-button value="5m">5分钟</n-radio-button>
+              <n-radio-button value="15m">15分钟</n-radio-button>
+            </n-radio-group>
+          </div>
         </div>
         <div ref="memoryChartRef" style="height: 250px;"></div>
       </div>
@@ -173,7 +203,14 @@
               @update:value="refreshDiskChart"
             />
           </div>
-          <div style="display: flex; gap: 8px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <n-select
+              v-model:value="selectedDate"
+              :options="dateOptions"
+              size="small"
+              style="width: 100px;"
+              @update:value="refreshDiskChart"
+            />
             <n-radio-group v-model:value="diskMetricType" size="small" @update:value="refreshDiskChart">
               <n-radio-button value="throughput">吞吐量</n-radio-button>
               <n-radio-button value="iops">IOPS/队列</n-radio-button>
@@ -256,12 +293,17 @@
         <div class="analysis-content">
           <n-spin :show="aiLoading">
             <div v-if="aiAnalysis" class="analysis-result">
-              <n-alert type="info" :title="aiAnalysis.title">
-                {{ aiAnalysis.summary }}
-              </n-alert>
+              <div class="analysis-card-content">
+                <div class="analysis-header">
+                  <h4>{{ aiAnalysis.title }}</h4>
+                  <span class="analysis-time">{{ formatTime(aiAnalysis.created_at) }}</span>
+                </div>
+                <div class="markdown-content" v-html="renderMarkdown(aiAnalysis.summary)"></div>
+              </div>
+              
               <div v-if="aiAnalysis.recommendations" class="recommendations">
                 <h4>建议</h4>
-                <p>{{ aiAnalysis.recommendations }}</p>
+                <div class="markdown-content" v-html="renderMarkdown(aiAnalysis.recommendations)"></div>
               </div>
             </div>
             <div v-else class="analysis-empty">
@@ -352,7 +394,7 @@ import {
   NFormItem, NInput, NInputNumber, NRadioGroup, NRadioButton,
   NProgress, useMessage, NEmpty, NSpace, NTag, NAvatar,
   NDescriptions, NDescriptionsItem, NGrid, NGi, NStatistic,
-  NTabs, NTabPane
+  NTabs, NTabPane, NDatePicker
 } from 'naive-ui'
 import {
   HardwareChip, SpeedometerOutline, ServerOutline, RefreshOutline,
@@ -364,6 +406,14 @@ import WidgetConfigModal from '@/components/WidgetConfigModal.vue'
 import CpuWidget from '@/components/widgets/CpuWidget.vue'
 import GpuWidget from '@/components/widgets/GpuWidget.vue'
 import AlertsWidget from '@/components/widgets/AlertsWidget.vue'
+
+import { marked } from 'marked'
+
+// 配置 marked
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
 
 // Icons
 const iconMap: Record<string, any> = {
@@ -379,13 +429,34 @@ const selectedDevice = ref<string | null>(null)
 const deviceOptions = ref<{label: string, value: string}[]>([])
 const currentMetrics = ref<any[]>([])
 const cpuTimeRange = ref('5m')
+const cpuMetricType = ref('usage')
 const gpuTimeRange = ref('5m')
 const gpuMetricType = ref('usage')
 const memoryTimeRange = ref('5m')
 const diskTimeRange = ref('5m')
 const diskMetricType = ref('throughput')
-const selectedDisk = ref('all')
-const diskOptions = ref([{ label: '所有磁盘', value: 'all' }])
+const selectedDisk = ref('') // 初始为空，加载后自动选择 C 盘
+const diskOptions = ref<{label: string, value: string}[]>([])
+
+// 日期选择 - 生成过去7天的日期选项
+const dateOptions = computed(() => {
+  const options = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today)
+    date.setDate(today.getDate() - i)
+    const value = date.toISOString().split('T')[0]  // YYYY-MM-DD
+    const label = i === 0 ? '今天' : i === 1 ? '昨天' : `${date.getMonth() + 1}月${date.getDate()}日`
+    options.push({ label, value })
+  }
+  return options
+})
+
+// 默认选择今天
+const selectedDate = ref(new Date().toISOString().split('T')[0])
+const customDateRange = ref<[number, number] | null>(null) // 自定义日期范围 (时间戳)
 
 const cpuChartRef = ref<HTMLElement | null>(null)
 const gpuChartRef = ref<HTMLElement | null>(null)
@@ -690,16 +761,136 @@ const loadAlerts = async () => {
 
 const refreshCpuChart = async () => {
   if (!selectedDevice.value || !cpuChart) return
+  
+  let url = ''
   const seconds = cpuTimeRange.value === '1m' ? 60 : cpuTimeRange.value === '5m' ? 300 : 900
+  
+  // 如果选择了特定日期，使用日期范围查询
+  if (selectedDate.value) {
+    const dateStr = selectedDate.value
+    const startTime = new Date(dateStr).toISOString()
+    const endTime = new Date(dateStr + 'T23:59:59').toISOString()
+    url = `/performance/metrics/realtime/${selectedDevice.value}?start_time=${startTime}&end_time=${endTime}`
+  } else {
+    url = `/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`
+  }
+  
   try {
-    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    const { data } = await api.get(url)
     if (data.metrics && data.metrics.length > 0) {
-      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
-      const cpuData = data.metrics.map((m: any) => Number((m.cpu_percent || 0).toFixed(1)))
-      cpuChart.setOption({
-        xAxis: { data: timestamps },
-        series: [{ data: cpuData }]
+      // 转换为北京时间
+      const timestamps = data.metrics.map((m: any) => {
+        const date = new Date(m.timestamp)
+        date.setHours(date.getHours() + 8) // UTC+8 北京时间
+        return date.toLocaleTimeString()
       })
+      
+      let seriesData = []
+      let yAxisFormatter: any = '{value}%'
+      let seriesName = 'CPU'
+      let maxVal: number | undefined = 100
+      let lineColor = '#3b82f6'
+      let areaColor = 'rgba(59, 130, 246, 0.2)'
+      let yAxisName = ''
+      
+      let chartMax = undefined
+      let chartMin: any = 0
+      let gridConfig = { left: 40, right: 20, top: 20, bottom: 30 } // 默认grid
+
+      if (cpuMetricType.value === 'frequency') {
+        // Frequency in GHz
+        seriesData = data.metrics.map((m: any) => {
+            const mhz = m.cpu_frequency_mhz || 0
+            return Number((mhz / 1000).toFixed(2))
+        })
+        yAxisFormatter = '{value} GHz'
+        seriesName = '频率'
+        chartMax = undefined // Auto scale
+        lineColor = '#8b5cf6'
+        areaColor = 'rgba(139, 92, 246, 0.2)'
+        
+        // 动态设置 min，让波动更明显，但不要太夸张
+        const minFreq = Math.min(...seriesData)
+        if (minFreq > 0) {
+            chartMin = Math.floor(minFreq * 0.8)
+        }
+        // 增加左侧边距防止频率数值遮挡
+        gridConfig = { left: 60, right: 20, top: 20, bottom: 30 }
+      } else if (cpuMetricType.value === 'temperature') {
+        // Temperature in Celsius
+        // 注意：Windows上systeminformation可能无法获取CPU温度，返回null是正常的
+        seriesData = data.metrics.map((m: any) => {
+            const temp = m.cpu_temperature
+            return (temp !== null && temp !== undefined) ? Number(temp.toFixed(1)) : 0
+        })
+        // 检查是否有有效温度数据
+        const hasValidTemp = seriesData.some(v => v > 0)
+        if (!hasValidTemp) {
+            // 没有温度数据时使用空数组，让图表显示为0
+            console.warn('CPU温度数据不可用（Windows上可能不支持CPU温度采集）')
+        }
+        yAxisFormatter = '{value} °C'
+        seriesName = '温度'
+        chartMax = 100 // Typically max temp is around 100
+        lineColor = '#ef4444'
+        areaColor = 'rgba(239, 68, 68, 0.2)'
+        chartMin = 0
+        // 温度数值也可能比较长
+        gridConfig = { left: 50, right: 20, top: 20, bottom: 30 }
+      } else {
+        // Usage %
+        seriesData = data.metrics.map((m: any) => Number((m.cpu_percent || 0).toFixed(1)))
+        yAxisFormatter = '{value}%'
+        seriesName = 'CPU'
+        chartMax = 100
+        lineColor = '#3b82f6'
+        areaColor = 'rgba(59, 130, 246, 0.2)'
+        chartMin = 0
+        gridConfig = { left: 40, right: 20, top: 20, bottom: 30 }
+      }
+
+      const option: any = {
+        tooltip: { trigger: 'axis' }, // 确保 tooltip 被设置
+        xAxis: { data: timestamps },
+        yAxis: { 
+            min: chartMin,
+            max: chartMax, 
+            axisLabel: { formatter: yAxisFormatter },
+            name: yAxisName
+        },
+        // 使用前面定义的grid配置
+        grid: gridConfig,
+        series: [{ 
+            name: seriesName,
+            data: seriesData,
+            type: 'line',
+            smooth: true,
+            areaStyle: { color: areaColor },
+            lineStyle: { color: lineColor },
+            itemStyle: { color: lineColor }
+        }]
+      }
+      
+      // 显式确保 series 数据结构完整，避免被 replaceMerge 清空关键属性
+      option.series = [{
+          name: seriesName,
+          type: 'line',
+          smooth: true,
+          data: seriesData,
+          // 确保样式被应用
+          areaStyle: option.series[0].areaStyle,
+          lineStyle: option.series[0].lineStyle,
+          itemStyle: option.series[0].itemStyle
+      }]
+      
+      // 关键修正：确保 tooltip 存在，否则鼠标交互失效
+      if (!option.tooltip) {
+          option.tooltip = { trigger: 'axis' }
+      }
+
+      // 始终使用全量重绘确保 tooltip 正常工作
+      // 使用 setOption(option, true) 强制不合并，彻底重绘
+      cpuChart.setOption(option, true)
     }
   } catch (e: any) {
     console.error('Failed to load CPU chart data:', e)
@@ -708,11 +899,28 @@ const refreshCpuChart = async () => {
 
 const refreshGpuChart = async () => {
   if (!selectedDevice.value || !gpuChart) return
+  
+  let url = ''
   const seconds = gpuTimeRange.value === '1m' ? 60 : gpuTimeRange.value === '5m' ? 300 : 900
+  
+  if (selectedDate.value) {
+    const dateStr = selectedDate.value
+    const startTime = new Date(dateStr).toISOString()
+    const endTime = new Date(dateStr + 'T23:59:59').toISOString()
+    url = `/performance/metrics/realtime/${selectedDevice.value}?start_time=${startTime}&end_time=${endTime}`
+  } else {
+    url = `/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`
+  }
+  
   try {
-    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    const { data } = await api.get(url)
     if (data.metrics && data.metrics.length > 0) {
-      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
+      // 转换为北京时间
+      const timestamps = data.metrics.map((m: any) => {
+        const date = new Date(m.timestamp)
+        date.setHours(date.getHours() + 8)
+        return date.toLocaleTimeString()
+      })
       
       let seriesData = []
       let yAxisFormatter = '{value}%'
@@ -744,29 +952,71 @@ const refreshGpuChart = async () => {
       gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0) / 1024)
       
       const option: any = {
+        tooltip: { trigger: 'axis' }, // 确保 tooltip 被设置
         xAxis: { data: timestamps },
         yAxis: { max: maxVal, axisLabel: { formatter: yAxisFormatter } },
         series: [{ 
             name: seriesName,
             data: seriesData,
+            type: 'line',
+            smooth: true,
             areaStyle: { color: 'rgba(139, 92, 246, 0.2)' }
         }]
       }
 
       // 显存模式下，不需要设置 max 为 100，如果是 usage 则需要
       if (gpuMetricType.value === 'memory') {
+         // 使用 GB 单位
+         seriesData = data.metrics.map((m: any) => {
+             const mb = m.gpu_memory_used_mb || 0
+             return Number((mb / 1024).toFixed(2))
+         })
+         
          delete option.yAxis.max
-         option.yAxis.axisLabel.formatter = '{value} MB'
-         // 但如果能拿到显存上限，最好设置一下
-         if (currentDeviceInfo.value && currentDeviceInfo.value.gpu_vram_mb) {
-             option.yAxis.max = currentDeviceInfo.value.gpu_vram_mb
-         }
+         option.yAxis.axisLabel.formatter = '{value} GB'
+         // 显存模式不需要强制 splitNumber，让它自动生成合理的刻度，或者设置为 undefined
+         delete option.yAxis.splitNumber 
+         option.grid = { left: 45, right: 20, top: 20, bottom: 30 }
+         
+         // 颜色
+         option.series[0].areaStyle = { color: 'rgba(139, 92, 246, 0.2)' }
+         option.series[0].lineStyle = { color: '#8b5cf6' }
+         option.series[0].itemStyle = { color: '#8b5cf6' }
+         
+         // 移除强制的最大值设置，让图表根据实际数据自动缩放，避免出现奇怪的刻度（如96GB/94GB）
+         if (option.yAxis.max) delete option.yAxis.max
       } else {
         option.yAxis.max = 100
         option.yAxis.axisLabel.formatter = '{value}%'
+        // 恢复默认行距设置（不强制 splitNumber，或者设置为 null/undefined 让 echarts 自动处理，通常是5段6行）
+        delete option.yAxis.splitNumber 
+        option.grid = { left: 40, right: 20, top: 20, bottom: 30 }
+        
+        // 恢复原来的紫色样式
+        option.series[0].areaStyle = { color: 'rgba(139, 92, 246, 0.2)' }
+        option.series[0].lineStyle = { color: '#8b5cf6' }
+        option.series[0].itemStyle = { color: '#8b5cf6' }
+      }
+      
+      // 显式确保 series 数据结构完整，避免被 replaceMerge 清空关键属性
+      option.series = [{
+          name: seriesName,
+          type: 'line',
+          smooth: true,
+          data: seriesData,
+          // 确保样式被应用
+          areaStyle: option.series[0].areaStyle,
+          lineStyle: option.series[0].lineStyle,
+          itemStyle: option.series[0].itemStyle
+      }]
+      
+      // 关键修正：确保 tooltip 存在，否则鼠标交互失效
+      if (!option.tooltip) {
+          option.tooltip = { trigger: 'axis' }
       }
 
-      gpuChart.setOption(option)
+      // 始终使用全量重绘确保 tooltip 正常工作
+      gpuChart.setOption(option, true)
     }
   } catch (e: any) {
     console.error('Failed to load GPU chart data:', e)
@@ -775,11 +1025,28 @@ const refreshGpuChart = async () => {
 
 const refreshMemoryChart = async () => {
   if (!selectedDevice.value || !memoryChart) return
+  
+  let url = ''
   const seconds = memoryTimeRange.value === '1m' ? 60 : memoryTimeRange.value === '5m' ? 300 : 900
+  
+  if (selectedDate.value) {
+    const dateStr = selectedDate.value
+    const startTime = new Date(dateStr).toISOString()
+    const endTime = new Date(dateStr + 'T23:59:59').toISOString()
+    url = `/performance/metrics/realtime/${selectedDevice.value}?start_time=${startTime}&end_time=${endTime}`
+  } else {
+    url = `/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`
+  }
+  
   try {
-    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    const { data } = await api.get(url)
     if (data.metrics && data.metrics.length > 0) {
-      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
+      // 转换为北京时间
+      const timestamps = data.metrics.map((m: any) => {
+        const date = new Date(m.timestamp)
+        date.setHours(date.getHours() + 8)
+        return date.toLocaleTimeString()
+      })
       const memoryData = data.metrics.map((m: any) => {
         if (m.memory_percent) return Number(m.memory_percent.toFixed(1))
         if (m.memory_used_mb && m.memory_available_mb) {
@@ -800,9 +1067,21 @@ const refreshMemoryChart = async () => {
 
 const refreshDiskChart = async () => {
   if (!selectedDevice.value || !diskIOChart) return
+  
+  let url = ''
   const seconds = diskTimeRange.value === '1m' ? 60 : diskTimeRange.value === '5m' ? 300 : 900
+  
+  if (selectedDate.value) {
+    const dateStr = selectedDate.value
+    const startTime = new Date(dateStr).toISOString()
+    const endTime = new Date(dateStr + 'T23:59:59').toISOString()
+    url = `/performance/metrics/realtime/${selectedDevice.value}?start_time=${startTime}&end_time=${endTime}`
+  } else {
+    url = `/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`
+  }
+  
   try {
-    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    const { data } = await api.get(url)
     if (data.metrics && data.metrics.length > 0) {
       const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
       
@@ -814,20 +1093,33 @@ const refreshDiskChart = async () => {
         }
       })
       if (allDisks.size > 0) {
-        const options = [{ label: '所有磁盘', value: 'all' }]
+        const options: {label: string, value: string}[] = [] // 移除默认的"所有磁盘"选项
+        
+        // 优先查找 C 盘
+        let cDrive = ''
         Array.from(allDisks).sort().forEach(name => {
-          // 过滤掉 _Total，因为已有"所有磁盘"选项，且 _Total 在此处略显冗余
+          // 过滤掉 _Total
           if (name.includes('_Total')) return
 
           // 移除开头的数字索引 (例如 "0 C:" -> "C:")
           const label = name.replace(/^\d+\s+/, '')
           options.push({ label: label, value: name })
+          
+          if (label.includes('C:')) {
+              cDrive = name
+          }
         })
-        // 只有当当前选项不在列表中时才重置
-        if (!options.find(o => o.value === selectedDisk.value)) {
-           // Keep selection if valid, otherwise default to all
-        }
+        
         diskOptions.value = options
+        
+        // 如果当前没有选中磁盘，或者选中的磁盘不在列表中，则尝试选中 C 盘，否则选中第一个
+        if (!selectedDisk.value || !options.find(o => o.value === selectedDisk.value)) {
+            if (cDrive) {
+                selectedDisk.value = cDrive
+            } else if (options.length > 0) {
+                selectedDisk.value = options[0].value
+            }
+        }
       }
 
       let series = []
@@ -957,12 +1249,54 @@ const refreshDiskChart = async () => {
         }
       }
 
-      diskIOChart.setOption({
-        xAxis: { data: timestamps },
-        yAxis: { type: 'value', axisLabel: { formatter: yAxisFormatter } },
-        series: series,
-        legend: { show: true, top: 0, itemWidth: 8, itemHeight: 8, data: series.map(s => s.name) } // Ensure legend is shown
-      }, { replaceMerge: ['series'] }) // merge: true (but here we want replace somewhat, so verify) 
+      // Calculate appropriate max value to ensure consistent ticks (6 lines / 5 intervals)
+      // especially for small values where ECharts might default to interval 1 (creating many lines)
+      let currentMax = 0
+      series.forEach(s => {
+        if (s.data && s.data.length) {
+           const seriesMax = Math.max(...s.data.map((v:any) => Number(v) || 0))
+           if (seriesMax > currentMax) currentMax = seriesMax
+        }
+      })
+      
+      let chartMax = undefined
+      // If value is small, force max to 5 or 10 to get nice intervals (0,1,2,3,4,5 or 0,2,4,6,8,10)
+      if (currentMax > 0) {
+          if (currentMax <= 5) chartMax = 5
+          else if (currentMax <= 10) chartMax = 10
+      }
+
+      // 智能更新磁盘 IO 图表
+      const currentOption = diskIOChart.getOption() as any
+      // 检查 series 数量是否变化（总计模式是2条线，单盘模式是2条线，但类型不同；iops/latency 是1条线）
+      const isStructureChanged = (currentOption.series || []).length !== series.length || 
+                                 (currentOption.series[0] && currentOption.series[0].name !== series[0].name)
+      
+      if (isStructureChanged) {
+        // 结构变化（如从吞吐量切换到延迟），全量更新
+        diskIOChart.setOption({
+            xAxis: { data: timestamps },
+            yAxis: { 
+                type: 'value', 
+                splitNumber: 5, 
+                min: 0,
+                max: chartMax, 
+                axisLabel: { formatter: yAxisFormatter } 
+            },
+            grid: { left: 60, right: 20, top: 30, bottom: 20 },
+            series: series,
+            legend: { show: true, top: 0, itemWidth: 8, itemHeight: 8, data: series.map(s => s.name) }
+        }, { replaceMerge: ['series', 'yAxis', 'grid'] })
+      } else {
+        // 结构未变，只更新数据和坐标轴刻度（因为 max 可能变化）
+        diskIOChart.setOption({
+            xAxis: { data: timestamps },
+            yAxis: { 
+                max: chartMax // 仅更新 max，保持平滑
+            },
+            series: series
+        })
+      } 
     }
   } catch (e: any) {
     console.error('Failed to load Disk chart data:', e)
@@ -1039,20 +1373,20 @@ const initCharts = () => {
   if (diskIOChartRef.value) {
     diskIOChart = echarts.init(diskIOChartRef.value)
     diskIOChart.setOption({
-      tooltip: { trigger: 'axis' },
-      grid: { left: 50, right: 20, top: 30, bottom: 20 },
-      xAxis: { type: 'category', data: [] },
-      yAxis: { 
-        type: 'value', 
-        splitNumber: 3, 
-        axisLabel: { 
-          formatter: (value: number) => {
-            if (value >= 1024) return (value / 1024).toFixed(1) + ' GB/s'
-            return value + ' MB/s'
-          }
-        } 
-      },
-      series: [
+        tooltip: { trigger: 'axis' },
+        grid: { left: 60, right: 20, top: 30, bottom: 20 },
+        xAxis: { type: 'category', data: [] },
+        yAxis: { 
+          type: 'value', 
+          // 移除 splitNumber: 3，恢复默认行距，与其他图表一致（通常是5段6行）
+          axisLabel: { 
+            formatter: (value: number) => {
+              if (value >= 1024) return (value / 1024).toFixed(1) + ' GB/s'
+              return value + ' MB/s'
+            }
+          } 
+        },
+        series: [
         {
           name: '读取',
           type: 'line',
@@ -1076,17 +1410,75 @@ const initCharts = () => {
   }
 }
 
-const onDeviceChange = () => {
+const loadLatestAnalysis = async () => {
+  if (!selectedDevice.value) return
+  
+  try {
+    const { data } = await api.get('/ai/reports', {
+      params: {
+        device_id: selectedDevice.value,
+        analysis_type: 'realtime_metrics',
+        limit: 1
+      }
+    })
+    
+    if (data.items && data.items.length > 0) {
+      const report = data.items[0]
+      // 检查报告是否过期 (例如超过24小时)
+      const reportTime = new Date(report.created_at).getTime()
+      const now = Date.now()
+      if (now - reportTime < 24 * 60 * 60 * 1000) {
+        // 如果后端返回的 details 是 JSON 字符串，需要解析
+        let details = report.details
+        try {
+          if (typeof details === 'string') {
+            details = JSON.parse(details)
+          }
+        } catch (e) {
+          console.error('Failed to parse report details:', e)
+        }
+        
+        aiAnalysis.value = {
+          ...report,
+          details
+        }
+      } else {
+        aiAnalysis.value = null
+      }
+    } else {
+      aiAnalysis.value = null
+    }
+  } catch (e) {
+    console.error('Failed to load latest analysis:', e)
+  }
+}
+
+const renderMarkdown = (text: string) => {
+  if (!text) return ''
+  try {
+    return marked(text)
+  } catch (e) {
+    return text
+  }
+}
+
+const onDeviceChange = async () => {
   // Update device info when selection changes
   const device = deviceOptions.value.find(d => d.value === selectedDevice.value)
   if (device) {
     currentDeviceInfo.value = device
   }
-  loadMetrics()
-  loadBenchmarks()
-  loadAlerts()
-  refreshCharts()
-  loadProcesses()
+  // 先清空之前的状态
+  aiAnalysis.value = null
+  
+  await Promise.all([
+    loadMetrics(),
+    loadBenchmarks(),
+    loadAlerts(),
+    refreshCharts(),
+    loadProcesses(),
+    loadLatestAnalysis()
+  ])
 }
 
 const refreshData = () => {
@@ -1096,6 +1488,7 @@ const refreshData = () => {
   refreshCharts()
   loadProcesses()
   refreshWidgetData()
+  loadLatestAnalysis()
 }
 
 const runAIAnalysis = async () => {
@@ -1103,10 +1496,42 @@ const runAIAnalysis = async () => {
   
   aiLoading.value = true
   try {
-    const { data } = await api.post(`/ai/analyze/metrics?device_id=${selectedDevice.value}&seconds=300`)
+    // 获取 AI 设置
+    let aiSettings = {}
+    try {
+      // 从 AIChatDrawer 保存的 key 中读取
+      const provider = localStorage.getItem('ai_provider')
+      const apiKey = localStorage.getItem('ai_api_key')
+      const model = localStorage.getItem('ai_model')
+      const baseUrl = localStorage.getItem('ai_base_url')
+
+      if (apiKey) {
+        aiSettings = {
+          provider: provider || 'siliconflow',
+          api_key: apiKey,
+          model: model || '',
+          base_url: baseUrl || ''
+        }
+      } else {
+        message.warning('未检测到AI配置，将尝试使用默认设置。建议在AI对话框中配置API Key。')
+      }
+    } catch (e) {
+      console.error('Failed to load AI settings:', e)
+    }
+
+    const { data } = await api.post('/ai/analyze/metrics', {
+      device_id: selectedDevice.value,
+      seconds: 300,
+      ...aiSettings
+    })
     aiAnalysis.value = data
   } catch (e) {
     console.error('Failed to run AI analysis:', e)
+    if (e.response && e.response.data && e.response.data.detail) {
+      message.error('AI分析失败: ' + e.response.data.detail)
+    } else {
+      message.error('AI分析失败，请检查连接')
+    }
   } finally {
     aiLoading.value = false
   }
@@ -1147,6 +1572,11 @@ onMounted(async () => {
   initCharts()
   if (selectedDevice.value) {
     await onDeviceChange()
+    // 强制 resize 确保 tooltip 在初始加载后正常工作
+    setTimeout(() => {
+      cpuChart?.resize()
+      gpuChart?.resize()
+    }, 100)
     refreshInterval = window.setInterval(refreshData, 10000)
   }
   loadSavedWidgets()
@@ -1436,6 +1866,27 @@ onUnmounted(() => {
 
 .analysis-content {
   min-height: 150px;
+  max-height: 450px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Custom Scrollbar for analysis content */
+.analysis-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.analysis-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.analysis-content::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+.analysis-content::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
 .analysis-result {
@@ -1444,22 +1895,58 @@ onUnmounted(() => {
   gap: 16px;
 }
 
-.recommendations {
-  padding: 12px;
-  background: #f0f9ff;
+.analysis-card-content {
+  background: white;
   border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.analysis-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.analysis-time {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.recommendations {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
 }
 
 .recommendations h4 {
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
   font-size: 14px;
-  color: #0369a1;
+  font-weight: 600;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.recommendations p {
-  margin: 0;
-  font-size: 14px;
-  color: #075985;
+.recommendations h4::before {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 14px;
+  background: #3b82f6;
+  border-radius: 2px;
 }
 
 .analysis-empty {
@@ -1532,5 +2019,46 @@ onUnmounted(() => {
   font-size: 12px;
   color: #94a3b8;
   white-space: nowrap;
+}
+/* Markdown Styling */
+.markdown-content :deep(h1),
+.markdown-content :deep(h2),
+.markdown-content :deep(h3),
+.markdown-content :deep(h4),
+.markdown-content :deep(h5),
+.markdown-content :deep(h6) {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #1f2937;
+}
+
+.markdown-content :deep(p) {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  padding-left: 20px;
+  margin-bottom: 12px;
+}
+
+.markdown-content :deep(li) {
+  margin-bottom: 4px;
+}
+
+.markdown-content :deep(strong) {
+  font-weight: 600;
+  color: #111827;
+}
+
+.markdown-content :deep(code) {
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9em;
 }
 </style>
