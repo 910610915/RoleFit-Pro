@@ -75,10 +75,18 @@ def create_metric(metric: PerformanceMetricCreate, db: Session = Depends(get_db_
 @router.post("/metrics/batch", status_code=status.HTTP_201_CREATED)
 def create_metrics_batch(batch: MetricsBatchCreate, db: Session = Depends(get_db_sync)):
     """批量创建性能指标"""
+    import json
+
     created_count = 0
     for metric_data in batch.metrics:
         metric_data.device_id = batch.device_id
-        db_metric = PerformanceMetric(**metric_data.model_dump())
+
+        # 将top_processes列表转换为JSON字符串
+        metric_dict = metric_data.model_dump()
+        if metric_dict.get("top_processes"):
+            metric_dict["top_processes"] = json.dumps(metric_dict["top_processes"])
+
+        db_metric = PerformanceMetric(**metric_dict)
         db.add(db_metric)
         created_count += 1
 
@@ -119,6 +127,8 @@ def get_metrics(
 @router.get("/metrics/latest", response_model=PerformanceMetricResponse)
 def get_latest_metric(device_id: str, db: Session = Depends(get_db_sync)):
     """获取设备最新性能指标"""
+    import json
+
     result = db.execute(
         select(PerformanceMetric)
         .where(PerformanceMetric.device_id == device_id)
@@ -128,7 +138,44 @@ def get_latest_metric(device_id: str, db: Session = Depends(get_db_sync)):
     metric = result.scalar_one_or_none()
     if not metric:
         raise HTTPException(status_code=404, detail="No metrics found for this device")
-    return metric
+
+    # 转换为字典并解析 top_processes JSON 字符串
+    metric_dict = {
+        "id": metric.id,
+        "device_id": metric.device_id,
+        "timestamp": metric.timestamp,
+        "cpu_percent": metric.cpu_percent,
+        "cpu_temperature": metric.cpu_temperature,
+        "cpu_power_watts": metric.cpu_power_watts,
+        "cpu_frequency_mhz": metric.cpu_frequency_mhz,
+        "gpu_percent": metric.gpu_percent,
+        "gpu_temperature": metric.gpu_temperature,
+        "gpu_power_watts": metric.gpu_power_watts,
+        "gpu_frequency_mhz": metric.gpu_frequency_mhz,
+        "gpu_memory_used_mb": metric.gpu_memory_used_mb,
+        "gpu_memory_total_mb": metric.gpu_memory_total_mb,
+        "memory_percent": metric.memory_percent,
+        "memory_used_mb": metric.memory_used_mb,
+        "memory_available_mb": metric.memory_available_mb,
+        "disk_read_mbps": metric.disk_read_mbps,
+        "disk_write_mbps": metric.disk_write_mbps,
+        "disk_io_percent": metric.disk_io_percent,
+        "network_sent_mbps": metric.network_sent_mbps,
+        "network_recv_mbps": metric.network_recv_mbps,
+        "process_count": metric.process_count,
+        "top_processes": metric.top_processes,
+        "raw_data": metric.raw_data,
+        "created_at": metric.created_at,
+    }
+
+    # 解析 top_processes JSON 字符串
+    if metric_dict["top_processes"]:
+        try:
+            metric_dict["top_processes"] = json.loads(metric_dict["top_processes"])
+        except:
+            metric_dict["top_processes"] = None
+
+    return metric_dict
 
 
 @router.get("/metrics/realtime/{device_id}")

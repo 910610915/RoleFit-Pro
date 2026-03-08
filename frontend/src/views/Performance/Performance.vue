@@ -89,6 +89,25 @@
       </div>
     </section>
 
+    <!-- Process Monitor -->
+    <section class="process-section">
+      <div class="section-header">
+        <h3>进程资源消耗排行 (Top 10)</h3>
+        <n-button size="small" @click="loadProcesses" :loading="processLoading">
+          <template #icon><n-icon><Refresh /></n-icon></template>
+          刷新
+        </n-button>
+      </div>
+      <n-data-table
+        :columns="processColumns"
+        :data="processes"
+        :loading="processLoading"
+        :pagination="false"
+        :max-height="300"
+        size="small"
+      />
+    </section>
+
     <!-- Customizable Widget Board -->
     <section class="widget-board" v-if="userRole === 'admin' || userRole === 'manager'">
       <div class="widget-header">
@@ -271,6 +290,41 @@ const gpuVramHistory = ref<number[]>([])
 const benchmarks = ref<any[]>([])
 const benchmarkLoading = ref(false)
 const showBenchmarkModal = ref(false)
+
+// Process monitoring
+const processes = ref<any[]>([])
+const processLoading = ref(false)
+
+const processColumns = [
+  { title: '进程名', key: 'name', width: 200 },
+  { title: 'PID', key: 'pid', width: 80 },
+  { title: 'CPU %', key: 'cpu', width: 80,
+    render: (row: any) => `${row.cpu?.toFixed(1) || 0}%`
+  },
+  { title: '内存 %', key: 'memory', width: 80,
+    render: (row: any) => `${row.memory?.toFixed(1) || 0}%`
+  },
+  { title: '路径', key: 'path', ellipsis: { tooltip: true } }
+]
+
+const loadProcesses = async () => {
+  if (!selectedDevice.value) return
+  
+  processLoading.value = true
+  try {
+    const res = await fetch(`/api/performance/metrics/latest?device_id=${selectedDevice.value}`)
+    const data = await res.json()
+    
+    if (data.top_processes) {
+      processes.value = data.top_processes
+    }
+  } catch (e) {
+    console.error('Failed to load processes:', e)
+  } finally {
+    processLoading.value = false
+  }
+}
+
 const showWidgetConfig = ref(false)
 const userRole = ref('admin') // Should fetch from user store
 const message = useMessage()
@@ -632,6 +686,7 @@ const onDeviceChange = () => {
   loadBenchmarks()
   loadAlerts()
   refreshCharts()
+  loadProcesses()
 }
 
 const refreshData = () => {
@@ -639,6 +694,7 @@ const refreshData = () => {
   loadBenchmarks()
   loadAlerts()
   refreshCharts()
+  loadProcesses()
   refreshWidgetData()
 }
 
@@ -843,21 +899,22 @@ onUnmounted(() => {
   margin-bottom: 24px;
 }
 
-.chart-card {
+.process-section {
   background: white;
   border-radius: 12px;
   padding: 20px;
+  margin-bottom: 24px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.chart-header {
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
 
-.chart-header h3 {
+.section-header h3 {
   font-size: 16px;
   font-weight: 600;
   color: #1e293b;
