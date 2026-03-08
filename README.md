@@ -4,11 +4,13 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 
 ## 简介
 
-**RoleFit Pro** 是一款面向游戏开发公司的智能硬件性能基准测试与岗位匹配平台。
+**RoleFit Pro** 是一款面向企业的智能硬件性能监控与资产管理平台，支持 **5万台设备** 的企业级部署。
 
 - **集中管理** - 集中监控公司所有开发设备的硬件信息
-- **自动化测试** - 针对不同岗位运行标准化性能基准测试
-- **智能匹配** - 分析设备与岗位需求的匹配程度
+- **实时监控** - CPU/GPU/内存/磁盘/网络实时监控
+- **智能分析** - AI驱动的硬件性能分析与岗位匹配
+- **远程控制** - 远程关机、重启、唤醒等控制功能
+- **权限管理** - RBAC角色权限管理
 - **数据驱动** - 识别性能瓶颈，提供升级建议
 
 ---
@@ -18,7 +20,8 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 ### 后端
 - Python 3.10+ / FastAPI
 - SQLAlchemy (ORM)
-- SQLite (轻量级数据库)
+- PostgreSQL + TimescaleDB (支持5万台设备)
+- SQLite (轻量级部署可选)
 
 ### 前端
 - Vue 3 + TypeScript
@@ -32,10 +35,12 @@ Intelligent Hardware Performance Benchmark and Position Matching Platform
 - **Shadcn Vue** UI 组件
 
 ### Agent (Windows 客户端)
-- **Node.js** - 使用 [systeminformation](https://github.com/sebhildebrandt/systeminformation) 库进行硬件信息采集（最准确的 Windows 硬件信息库）
+- **Node.js** - 使用 [systeminformation](https://github.com/sebhildebrandt/systeminformation) 库进行硬件信息采集
 - **Python** - 客户端核心逻辑
+- **NVIDIA nvidia-smi** - GPU监控备选方案
 - 自动注册和心跳
 - 实时性能监控上报
+- 远程控制命令执行
 
 **为什么选择 systeminformation？**
 - 19,000+ 行代码，700+ 版本发布
@@ -116,8 +121,10 @@ python hardware_monitor.py
 
 **Agent 功能说明：**
 - `hardware_agent.py` - 设备注册、心跳、软件测试任务执行
-- `hardware_monitor.py` - 实时硬件性能监控（CPU/GPU/内存/磁盘/网络）
+- `hardware_monitor.py` - 实时硬件性能监控（CPU/GPU/内存/磁盘/网络/进程）
 - 使用 **Node.js + systeminformation** 获取准确的硬件信息
+- 使用 **nvidia-smi** 作为 GPU 监控备选方案
+- 支持远程控制命令拉取和执行
 
 ---
 
@@ -142,12 +149,20 @@ RoleFit Pro/
 │   └── package.json
 ├── agent/                # Windows Agent
 │   ├── hardware_agent.py    # Agent 主程序
-│   ├── hardware_monitor.py   # 实时监控
+│   ├── hardware_monitor.py  # 实时监控
+│   ├── nodejs_hardware.py  # Node.js 包装器
+│   ├── nodejs/
+│   │   └── hardware_info/  # Node.js 硬件采集
+│   │       └── hardware_info.js
 │   ├── blender_benchmark.py # Blender 测试
 │   ├── maya_benchmark.py    # Maya 测试
 │   ├── unreal_benchmark.py  # Unreal 测试
 │   ├── command_executor.py  # 命令执行器
 │   └── software_manager.py  # 软件管理
+├── docs/
+│   └── plans/              # 设计文档
+│       ├── 2026-03-08-rolefit-pro-enterprise-design.md
+│       └── 2026-03-08-rolefit-pro-development-plan.md
 └── README.md
 ```
 
@@ -160,53 +175,86 @@ RoleFit Pro/
 - 硬件信息展示 (CPU/GPU/内存/磁盘)
 - 设备状态监控 (在线/离线/测试中)
 - 设备分组 (按部门/岗位)
+- **设备画像** - 完整的设备档案（归属信息、采购信息、使用统计）
 
-### 2. 岗位管理
+### 2. 实时性能监控
+- CPU 监控（利用率、频率、温度）
+- GPU 监控（利用率、显存、温度，支持 NVIDIA nvidia-smi）
+- 内存监控（使用率、已用/可用）
+- 磁盘IO监控（读取/写入速度）
+- 网络监控（上传/下载速度）
+- **进程监控** - Top 10 资源消耗进程
+
+### 3. 趋势分析
+- CPU 趋势图（1分钟/5分钟/15分钟）
+- GPU 趋势图
+- 内存趋势图
+- 磁盘IO趋势图
+
+### 4. 智能告警
+- 自定义告警规则
+- CPU/GPU 高温告警
+- 内存/磁盘空间不足告警
+- 硬盘寿命告警（SMART监控）
+- 设备离线告警
+
+### 5. 远程控制
+- 远程关机/重启
+- 远程锁定
+- 远程唤醒 (Wake-on-LAN)
+- 远程命令执行
+
+### 6. 权限管理 (RBAC)
+- 角色管理（超级管理员、IT管理员、运维人员、部门管理员、只读用户）
+- 权限细粒度控制
+- 部门数据隔离
+- 审计日志
+
+### 7. 第三方集成
+- 资产管理平台 API 对接
+- 企业通讯工具集成
+- 可配置的 API 网关
+
+### 8. 岗位管理
 - 预设岗位配置 (程序、美术、TA、VFX、视频)
 - 自定义岗位需求
 - 岗位标准设置
 
-### 3. 软件管理
+### 9. 软件管理
 - 测试软件库 (VS、UE、Maya、Blender、PS、PR、AE 等)
 - 自动安装/检测
 - 软件版本管理
 
-### 4. 脚本管理
+### 10. 脚本管理
 - 40+ 岗位测试脚本
 - 自动化执行 (编译、渲染、视口测试)
 - 性能指标采集
 
-### 5. 任务系统
+### 11. 任务系统
 - 创建测试任务
 - 定时任务调度
 - 执行状态跟踪
 - 任务历史记录
 
-### 6. 数据分析
+### 12. 数据分析
 - 性能趋势分析
 - 瓶颈识别
 - 达标判定
 - 升级建议
 
-### 7. AI 智能分析
+### 13. AI 智能分析
 - LLM 驱动的硬件性能分析
 - 多 AI 提供商支持 (MiniMax、DeepSeek、智谱等)
 - 自动化瓶颈诊断
 - 升级建议生成
 
-### 8. 实时监控
-- WebSocket 实时推送
-- CPU/GPU/内存/磁盘监控
-- 自动告警触发
-- 任务调度自动化
-
-### 9. AI 智能对话助手
+### 14. AI 智能对话助手
 - 侧边栏式 AI 对话（类似 Chrome 插件体验）
 - 支持查询设备列表、状态、性能等
 - Markdown 表格格式展示
 - 支持多 LLM 提供商
 
-### 10. Inspira UI 动画特效
+### 15. Inspira UI 动画特效
 - Spotlight 卡片效果
 - Glare 卡片效果
 - 数字滚动动画
@@ -214,6 +262,11 @@ RoleFit Pro/
 - 闪烁粒子背景
 - 渐变边框光效
 - 彩带庆祝动画
+
+### 16. 数据保留策略
+- 可配置的数据保留天数（3/7/14/30/90天）
+- 自动清理过期数据
+- 可配置的采集间隔（1/5/10/30/60秒）
 
 ---
 
@@ -320,15 +373,24 @@ import AuroraBackground from '@/components/ui/aurora-background/AuroraBackground
 主要端点：
 - POST /api/auth/login - 用户登录
 - GET /api/devices - 设备列表
+- GET /api/devices/search - 设备搜索
+- GET /api/devices/{id}/profile - 设备画像
 - POST /api/devices/agent/register - Agent 注册
+- POST /api/devices/{id}/control - 远程控制命令
 - GET /api/software - 软件列表
 - GET /api/scripts - 测试脚本
 - POST /api/tasks - 创建任务
 - GET /api/results - 测试结果
 - GET /api/stats/dashboard - 仪表盘统计
 - GET /api/performance/metrics - 性能指标
+- GET /api/performance/metrics/trend - 趋势数据
+- GET /api/performance/processes - 进程列表
+- GET /api/performance/alerts - 告警列表
 - POST /api/ai_analysis/analyze - AI 分析
 - GET /api/scheduler/status - 调度器状态
+- GET /api/audit-logs - 审计日志
+- GET /api/roles - 角色列表
+- GET /api/third-party-apis - 第三方API配置
 
 ---
 

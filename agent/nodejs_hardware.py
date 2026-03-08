@@ -142,12 +142,21 @@ def get_realtime_metrics() -> Dict[str, Any]:
 
     data = result.get("data", {})
 
+    # 处理内存百分比（systeminformation有时返回null）
+    mem_data = data.get("memory", {})
+    mem_percent = mem_data.get("percent")
+    if mem_percent is None:
+        # 手动计算内存百分比
+        mem_total = mem_data.get("total", 1)
+        mem_used = mem_data.get("used", 0)
+        mem_percent = round((mem_used / mem_total) * 100, 2) if mem_total > 0 else 0
+
     metrics = {
         "cpu_percent": data.get("cpu", {}).get("percent", 0),
         "cpu_frequency_mhz": data.get("cpu", {}).get("speed", 0),
-        "memory_percent": data.get("memory", {}).get("percent", 0),
-        "memory_used_mb": data.get("memory", {}).get("used_mb", 0),
-        "memory_available_mb": data.get("memory", {}).get("available_mb", 0),
+        "memory_percent": mem_percent,
+        "memory_used_mb": mem_data.get("used_mb", 0),
+        "memory_available_mb": mem_data.get("available_mb", 0),
         "gpu_percent": data.get("gpu", {}).get("percent"),
         "gpu_temperature": data.get("gpu", {}).get("temperature"),
         "gpu_memory_used_mb": data.get("gpu", {}).get("memory_used_mb"),

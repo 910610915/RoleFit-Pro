@@ -154,6 +154,37 @@ async function getHardwareInfo() {
 }
 
 /**
+ * Get GPU metrics from nvidia-smi (fallback when systeminformation fails)
+ */
+async function getNvidiaGpuMetrics() {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    exec('nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits', 
+      { timeout: 5000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve(null);
+          return;
+        }
+        
+        const parts = stdout.trim().split(',').map(s => parseFloat(s.trim()));
+        if (parts.length >= 5 && !isNaN(parts[0])) {
+          resolve({
+            percent: parts[0],
+            memory_percent: parts[1],
+            memory_used_mb: parts[2],
+            memory_total_mb: parts[3],
+            temperature: parts[4]
+          });
+        } else {
+          resolve(null);
+        }
+      }
+    );
+  });
+}
+
+/**
  * Get realtime metrics (CPU, memory, etc.)
  */
 async function getRealtimeMetrics() {
@@ -176,18 +207,30 @@ async function getRealtimeMetrics() {
       si.networkStats()
     ]);
 
-    // Get GPU metrics
+    // Get GPU metrics - try systeminformation first, then nvidia-smi fallback
     let gpuPercent = null;
     let gpuMemoryUsed = null;
     let gpuMemoryTotal = null;
     let gpuTemperature = null;
 
+    // First try systeminformation
     if (gpuLoad.controllers && gpuLoad.controllers.length > 0) {
       const gpu = gpuLoad.controllers[0];
       gpuPercent = gpu.utilizationGpu || null;
-      gpuMemoryUsed = gpu.utilizationMemory ? Math.round(gpu.memoryUsed * 1024) : null; // Convert to MB
+      gpuMemoryUsed = gpu.utilizationMemory ? Math.round(gpu.memoryUsed * 1024) : null;
       gpuMemoryTotal = gpu.memoryTotal ? Math.round(gpu.memoryTotal * 1024) : null;
       gpuTemperature = gpu.temperatureGpu || null;
+    }
+
+    // Fallback to nvidia-smi if systeminformation returns null
+    if (gpuPercent === null || gpuMemoryUsed === null) {
+      const nvidiaMetrics = await getNvidiaGpuMetrics();
+      if (nvidiaMetrics) {
+        gpuPercent = gpuPercent !== null ? gpuPercent : nvidiaMetrics.percent;
+        gpuMemoryUsed = gpuMemoryUsed !== null ? gpuMemoryUsed : nvidiaMetrics.memory_used_mb;
+        gpuMemoryTotal = gpuMemoryTotal !== null ? gpuMemoryTotal : nvidiaMetrics.memory_total_mb;
+        gpuTemperature = gpuTemperature !== null ? gpuTemperature : nvidiaMetrics.temperature;
+      }
     }
 
     const result = {
