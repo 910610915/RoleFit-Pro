@@ -16,12 +16,76 @@
         />
         <n-button type="primary" @click="refreshData">
           <template #icon>
-            <n-icon><Refresh /></n-icon>
+<n-icon><RefreshOutline /></n-icon>
           </template>
           刷新
         </n-button>
       </div>
     </header>
+
+    <!-- Device Hardware Info -->
+    <section class="device-info-section" v-if="currentDeviceInfo">
+      <n-card title="设备硬件信息" size="small">
+        <n-tabs type="line" size="small">
+          <n-tab-pane name="info" tab="基本信息">
+            <n-descriptions :column="3" label-placement="left" bordered>
+              <n-descriptions-item label="设备名称">{{ currentDeviceInfo.device_name || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="IP地址">{{ currentDeviceInfo.ip_address || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="主机名">{{ currentDeviceInfo.hostname || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="MAC地址">{{ currentDeviceInfo.mac_address || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="部门">{{ currentDeviceInfo.department || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="岗位">{{ currentDeviceInfo.position || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="操作系统">{{ currentDeviceInfo.os_name || '-' }} {{ currentDeviceInfo.os_version || '' }}</n-descriptions-item>
+              <n-descriptions-item label="状态">
+                <n-tag :type="currentDeviceInfo.status === 'online' ? 'success' : 'default'" size="small">
+                  {{ currentDeviceInfo.status === 'online' ? '在线' : currentDeviceInfo.status === 'offline' ? '离线' : currentDeviceInfo.status }}
+                </n-tag>
+              </n-descriptions-item>
+            </n-descriptions>
+          </n-tab-pane>
+          <n-tab-pane name="cpu" tab="CPU">
+            <n-descriptions :column="2" label-placement="left" bordered>
+              <n-descriptions-item label="型号">{{ currentDeviceInfo.cpu_model || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="核心数">{{ currentDeviceInfo.cpu_cores || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="线程数">{{ currentDeviceInfo.cpu_threads || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="基础频率">{{ currentDeviceInfo.cpu_base_clock ? currentDeviceInfo.cpu_base_clock + ' GHz' : '-' }}</n-descriptions-item>
+            </n-descriptions>
+          </n-tab-pane>
+          <n-tab-pane name="gpu" tab="GPU">
+            <n-descriptions :column="2" label-placement="left" bordered>
+              <n-descriptions-item label="型号">{{ currentDeviceInfo.gpu_model || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="显存">{{ currentDeviceInfo.gpu_vram_mb ? currentDeviceInfo.gpu_vram_mb + ' MB' : '-' }}</n-descriptions-item>
+              <n-descriptions-item label="驱动版本">{{ currentDeviceInfo.gpu_driver_version || '-' }}</n-descriptions-item>
+            </n-descriptions>
+          </n-tab-pane>
+          <n-tab-pane name="memory" tab="内存">
+            <n-descriptions :column="2" label-placement="left" bordered>
+              <n-descriptions-item label="总容量">{{ currentDeviceInfo.ram_total_gb ? currentDeviceInfo.ram_total_gb + ' GB' : '-' }}</n-descriptions-item>
+              <n-descriptions-item label="频率">{{ currentDeviceInfo.ram_frequency ? currentDeviceInfo.ram_frequency + ' MHz' : '-' }}</n-descriptions-item>
+            </n-descriptions>
+          </n-tab-pane>
+          <n-tab-pane name="storage" tab="存储">
+            <n-space vertical>
+              <!-- 显示全量磁盘 -->
+              <n-card v-if="currentDeviceInfo.all_disks && currentDeviceInfo.all_disks.length > 0" size="small" title="磁盘列表">
+                <n-descriptions v-for="(disk, index) in currentDeviceInfo.all_disks" :key="index" :column="2" label-placement="left" bordered>
+                  <n-descriptions-item :label="'磁盘 ' + (index + 1)">{{ disk.model || '-' }}</n-descriptions-item>
+                  <n-descriptions-item label="容量">{{ disk.capacity_tb ? disk.capacity_tb + ' TB' : disk.capacity_gb ? (disk.capacity_gb / 1024).toFixed(1) + ' TB' : '-' }}</n-descriptions-item>
+                  <n-descriptions-item label="类型">{{ disk.type || '-' }}</n-descriptions-item>
+                  <n-descriptions-item label="接口">{{ disk.interface || '-' }}</n-descriptions-item>
+                </n-descriptions>
+              </n-card>
+              <!-- 备用显示单个磁盘 -->
+              <n-descriptions v-else :column="2" label-placement="left" bordered>
+                <n-descriptions-item label="型号">{{ currentDeviceInfo.disk_model || '-' }}</n-descriptions-item>
+                <n-descriptions-item label="容量">{{ currentDeviceInfo.disk_capacity_tb ? currentDeviceInfo.disk_capacity_tb + ' TB' : '-' }}</n-descriptions-item>
+                <n-descriptions-item label="类型">{{ currentDeviceInfo.disk_type || '-' }}</n-descriptions-item>
+              </n-descriptions>
+            </n-space>
+          </n-tab-pane>
+        </n-tabs>
+      </n-card>
+    </section>
 
     <!-- Real-time Metrics Cards -->
     <section class="metrics-section">
@@ -57,7 +121,7 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>CPU 使用率趋势</h3>
-          <n-radio-group v-model:value="timeRange" size="small" @update:value="refreshCharts">
+          <n-radio-group v-model:value="cpuTimeRange" size="small" @update:value="refreshCpuChart">
             <n-radio-button value="1m">1分钟</n-radio-button>
             <n-radio-button value="5m">5分钟</n-radio-button>
             <n-radio-button value="15m">15分钟</n-radio-button>
@@ -68,6 +132,17 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>GPU 使用率趋势</h3>
+          <div style="display: flex; gap: 8px;">
+            <n-radio-group v-model:value="gpuMetricType" size="small" @update:value="refreshGpuChart">
+              <n-radio-button value="usage">使用率</n-radio-button>
+              <n-radio-button value="memory">显存</n-radio-button>
+            </n-radio-group>
+            <n-radio-group v-model:value="gpuTimeRange" size="small" @update:value="refreshGpuChart">
+              <n-radio-button value="1m">1分钟</n-radio-button>
+              <n-radio-button value="5m">5分钟</n-radio-button>
+              <n-radio-button value="15m">15分钟</n-radio-button>
+            </n-radio-group>
+          </div>
         </div>
         <div ref="gpuChartRef" style="height: 250px;"></div>
       </div>
@@ -78,12 +153,33 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>内存 使用率趋势</h3>
+          <n-radio-group v-model:value="memoryTimeRange" size="small" @update:value="refreshMemoryChart">
+            <n-radio-button value="1m">1分钟</n-radio-button>
+            <n-radio-button value="5m">5分钟</n-radio-button>
+            <n-radio-button value="15m">15分钟</n-radio-button>
+          </n-radio-group>
         </div>
         <div ref="memoryChartRef" style="height: 250px;"></div>
       </div>
       <div class="chart-card">
         <div class="chart-header">
-          <h3>磁盘IO 趋势</h3>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h3>磁盘IO 趋势</h3>
+            <n-select 
+              v-model:value="selectedDisk" 
+              :options="diskOptions" 
+              size="small" 
+              style="width: 120px"
+              @update:value="refreshDiskChart"
+            />
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <n-radio-group v-model:value="diskMetricType" size="small" @update:value="refreshDiskChart">
+              <n-radio-button value="throughput">吞吐量</n-radio-button>
+              <n-radio-button value="iops">IOPS/队列</n-radio-button>
+              <n-radio-button value="latency">延迟</n-radio-button>
+            </n-radio-group>
+          </div>
         </div>
         <div ref="diskIOChartRef" style="height: 250px;"></div>
       </div>
@@ -94,21 +190,23 @@
       <div class="section-header">
         <h3>进程资源消耗排行 (Top 10)</h3>
         <n-button size="small" @click="loadProcesses" :loading="processLoading">
-          <template #icon><n-icon><Refresh /></n-icon></template>
+          <template #icon><n-icon><RefreshOutline /></n-icon></template>
           刷新
         </n-button>
       </div>
       <n-data-table
+        v-if="processes.length > 0"
         :columns="processColumns"
         :data="processes"
         :loading="processLoading"
         :pagination="false"
         :max-height="300"
-        size="small"
+        size="medium"
       />
+      <n-empty v-else description="暂无进程数据，请确保Agent已启动并正在监控" />
     </section>
 
-    <!-- Customizable Widget Board -->
+    <!-- 自定义看板 - 暂时注释，与主图表重复
     <section class="widget-board" v-if="userRole === 'admin' || userRole === 'manager'">
       <div class="widget-header">
         <h3>自定义看板</h3>
@@ -124,6 +222,7 @@
         </div>
       </div>
     </section>
+    -->
 
     <!-- Bottom Row -->
     <section class="bottom-section">
@@ -132,7 +231,7 @@
         <div class="card-header">
           <h3>基准测试结果</h3>
           <n-button size="small" @click="showBenchmarkModal = true">
-            <template #icon><n-icon><Add /></n-icon></template>
+            <template #icon><n-icon><AddOutline /></n-icon></template>
             新建测试
           </n-button>
         </div>
@@ -145,8 +244,8 @@
         />
       </div>
 
-      <!-- AI Analysis (Legacy - Removing) -->
-      <!-- <div class="analysis-card">
+      <!-- AI Analysis -->
+      <div class="analysis-card">
         <div class="card-header">
           <h3>AI 智能分析</h3>
           <n-button size="small" type="primary" @click="runAIAnalysis" :loading="aiLoading">
@@ -166,12 +265,12 @@
               </div>
             </div>
             <div v-else class="analysis-empty">
-              <n-empty description="请使用右下角的 AI 助手进行交互分析">
+              <n-empty description="点击一键分析生成报告">
               </n-empty>
             </div>
           </n-spin>
         </div>
-      </div> -->
+      </div>
     </section>
 
     <!-- Alerts -->
@@ -246,37 +345,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, h } from 'vue'
-import { 
-  NButton, NSelect, NIcon, NProgress, NRadioGroup, NRadioButton,
-  NDataTable, NAlert, NSpin, NEmpty, NModal, NForm, NFormItem,
-  NInput, NBadge, NSwitch, NInputNumber, NDivider, useMessage
-} from 'naive-ui'
+import { ref, reactive, onMounted, onUnmounted, computed, h } from 'vue'
 import * as echarts from 'echarts'
 import { 
-  HardwareChip, Desktop, Speedometer, Server, 
-  Refresh, Add, Bulb, Warning as WarningIcon, AlertCircle as AlertIcon,
-  SettingsOutline
+  NCard, NButton, NSelect, NIcon, NDataTable, NModal, NForm, 
+  NFormItem, NInput, NInputNumber, NRadioGroup, NRadioButton,
+  NProgress, useMessage, NEmpty, NSpace, NTag, NAvatar,
+  NDescriptions, NDescriptionsItem, NGrid, NGi, NStatistic,
+  NTabs, NTabPane
+} from 'naive-ui'
+import {
+  HardwareChip, SpeedometerOutline, ServerOutline, RefreshOutline,
+  SettingsOutline, AddOutline, DesktopOutline, WarningOutline, TrendingUpOutline, 
+  CloudUploadOutline, Construct, Grid
 } from '@vicons/ionicons5'
+import api from '@/api'
+import WidgetConfigModal from '@/components/WidgetConfigModal.vue'
+import CpuWidget from '@/components/widgets/CpuWidget.vue'
+import GpuWidget from '@/components/widgets/GpuWidget.vue'
+import AlertsWidget from '@/components/widgets/AlertsWidget.vue'
 
-import CpuWidget from '../../components/widgets/CpuWidget.vue'
-import GpuWidget from '../../components/widgets/GpuWidget.vue'
-import AlertsWidget from '../../components/widgets/AlertsWidget.vue'
-import WidgetConfigModal from '../../components/WidgetConfigModal.vue'
-
-// Map icons to metric keys
+// Icons
 const iconMap: Record<string, any> = {
-  cpu: HardwareChip,
-  gpu: Desktop,
-  memory: Speedometer,
-  disk: Server
+  cpu: Construct,
+  gpu: HardwareChip,
+  memory: SpeedometerOutline,
+  disk: ServerOutline,
+  default: Grid
 }
 
 // State
 const selectedDevice = ref<string | null>(null)
 const deviceOptions = ref<{label: string, value: string}[]>([])
 const currentMetrics = ref<any[]>([])
-const timeRange = ref('5m')
+const cpuTimeRange = ref('5m')
+const gpuTimeRange = ref('5m')
+const gpuMetricType = ref('usage')
+const memoryTimeRange = ref('5m')
+const diskTimeRange = ref('5m')
+const diskMetricType = ref('throughput')
+const selectedDisk = ref('all')
+const diskOptions = ref([{ label: '所有磁盘', value: 'all' }])
+
 const cpuChartRef = ref<HTMLElement | null>(null)
 const gpuChartRef = ref<HTMLElement | null>(null)
 const memoryChartRef = ref<HTMLElement | null>(null)
@@ -287,6 +397,10 @@ let memoryChart: echarts.ECharts | null = null
 let diskIOChart: echarts.ECharts | null = null
 const gpuVramHistory = ref<number[]>([])
 
+// Device info for hardware display
+const currentDeviceInfo = ref<any>(null)
+
+// Benchmarks
 const benchmarks = ref<any[]>([])
 const benchmarkLoading = ref(false)
 const showBenchmarkModal = ref(false)
@@ -299,10 +413,10 @@ const processColumns = [
   { title: '进程名', key: 'name', width: 200 },
   { title: 'PID', key: 'pid', width: 80 },
   { title: 'CPU %', key: 'cpu', width: 80,
-    render: (row: any) => `${row.cpu?.toFixed(1) || 0}%`
+    render: (row: any) => `${(row.cpu || 0).toFixed(1)}%`
   },
   { title: '内存 %', key: 'memory', width: 80,
-    render: (row: any) => `${row.memory?.toFixed(1) || 0}%`
+    render: (row: any) => `${(row.memory || 0).toFixed(1)}%`
   },
   { title: '路径', key: 'path', ellipsis: { tooltip: true } }
 ]
@@ -312,11 +426,20 @@ const loadProcesses = async () => {
   
   processLoading.value = true
   try {
-    const res = await fetch(`/api/performance/metrics/latest?device_id=${selectedDevice.value}`)
-    const data = await res.json()
+    const { data } = await api.get(`/performance/metrics/latest?device_id=${selectedDevice.value}`)
     
-    if (data.top_processes) {
+    if (data.top_processes && Array.isArray(data.top_processes)) {
+      // Process list - Top 10 by CPU usage
       processes.value = data.top_processes
+        .sort((a: any, b: any) => b.cpu - a.cpu)
+        .slice(0, 10)
+        .map((p: any) => ({
+          name: p.name,
+          pid: p.pid,
+          cpu: Number((p.cpu || 0).toFixed(1)),
+          memory: Number((p.memory || 0).toFixed(1)),
+          path: p.path || ''
+        }))
     }
   } catch (e) {
     console.error('Failed to load processes:', e)
@@ -391,6 +514,7 @@ const refreshWidgetData = () => {
 }
 
 const startingBenchmark = ref(false)
+const benchmarkFormRef = ref(null)
 const benchmarkForm = reactive({
   software_code: null,
   benchmark_type: null,
@@ -450,28 +574,27 @@ const benchmarkColumns = [
 // Methods
 const loadDevices = async () => {
   try {
-    console.log('Loading devices...')
-    const res = await fetch('/api/devices')
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`)
-    }
-    const data = await res.json()
+    const { data } = await api.get('/devices')
     console.log('Devices loaded:', data)
     
     if (data.items && data.items.length > 0) {
       deviceOptions.value = data.items.map((d: any) => ({
         label: d.device_name,
-        value: d.id
+        value: d.id,
+        ...d
       }))
       if (!selectedDevice.value) {
         selectedDevice.value = deviceOptions.value[0].value
+        // Store full device info
+        currentDeviceInfo.value = deviceOptions.value[0]
       }
     } else {
       console.warn('No devices found')
       message.warning('暂无可用设备，请先部署并启动Agent')
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to load devices:', e)
+    message.error('加载设备失败: ' + (e.message || '未知错误'))
   }
 }
 
@@ -479,8 +602,10 @@ const loadMetrics = async () => {
   if (!selectedDevice.value) return
   
   try {
-    const res = await fetch(`/api/performance/metrics/latest?device_id=${selectedDevice.value}`)
-    const data = await res.json()
+    const { data } = await api.get(`/performance/metrics/latest?device_id=${selectedDevice.value}`, {
+      retry: 3,
+      retryDelay: 1000
+    } as any)
     
     currentMetrics.value = metricConfig.map(config => {
       const key = config.key
@@ -490,16 +615,29 @@ const loadMetrics = async () => {
       
       if (key === 'cpu') {
         value = data.cpu_percent || 0
-        peak = data.cpu_percent || 0
-        avg = data.cpu_percent || 0
+        // 计算 memory_percent 如果为 null
+        if (data.memory_used_mb && data.memory_available_mb) {
+          const total = data.memory_used_mb + data.memory_available_mb
+          value = data.cpu_percent || 0
+          peak = data.cpu_percent || 0
+          avg = data.cpu_percent || 0
+        }
       } else if (key === 'gpu') {
         value = data.gpu_percent || 0
         peak = data.gpu_percent || 0
         avg = data.gpu_percent || 0
       } else if (key === 'memory') {
-        value = data.memory_percent || 0
-        peak = data.memory_percent || 0
-        avg = data.memory_percent || 0
+        // 如果 memory_percent 为 null，手动计算
+        if (data.memory_percent) {
+          value = data.memory_percent
+          peak = data.memory_percent
+          avg = data.memory_percent
+        } else if (data.memory_used_mb && data.memory_available_mb) {
+          const total = data.memory_used_mb + data.memory_available_mb
+          value = total > 0 ? (data.memory_used_mb / total * 100) : 0
+          peak = value
+          avg = value
+        }
       } else if (key === 'disk') {
         value = ((data.disk_read_mbps || 0) + (data.disk_write_mbps || 0)) / 2
         peak = value
@@ -509,13 +647,19 @@ const loadMetrics = async () => {
       return {
         ...config,
         value: config.key === 'disk' ? value.toFixed(1) : value.toFixed(1),
-        percentage: Math.min(value, 100),
+        percentage: Number(Math.min(value, 100).toFixed(1)),
         peak: config.key === 'disk' ? peak.toFixed(1) : peak.toFixed(1),
         avg: config.key === 'disk' ? avg.toFixed(1) : avg.toFixed(1)
       }
     })
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to load metrics:', e)
+    // 如果是404错误，说明没有数据，不显示错误而是显示提示
+    if (e.response?.status === 404) {
+      message.info('暂无性能数据，请确保Agent已启动并正在上报数据')
+    } else {
+      message.error('加载指标失败: ' + (e.message || ''))
+    }
   }
 }
 
@@ -524,8 +668,7 @@ const loadBenchmarks = async () => {
   
   benchmarkLoading.value = true
   try {
-    const res = await fetch(`/api/performance/benchmarks?device_id=${selectedDevice.value}&limit=10`)
-    const data = await res.json()
+    const { data } = await api.get(`/performance/benchmarks?device_id=${selectedDevice.value}&limit=10`)
     benchmarks.value = data.items || []
   } catch (e) {
     console.error('Failed to load benchmarks:', e)
@@ -538,58 +681,301 @@ const loadAlerts = async () => {
   if (!selectedDevice.value) return
   
   try {
-    const res = await fetch(`/api/performance/alerts?device_id=${selectedDevice.value}&is_resolved=false&limit=20`)
-    const data = await res.json()
+    const { data } = await api.get(`/performance/alerts?device_id=${selectedDevice.value}&is_resolved=false&limit=20`)
     alerts.value = data.items || []
   } catch (e) {
     console.error('Failed to load alerts:', e)
   }
 }
 
-const refreshCharts = async () => {
-  if (!selectedDevice.value || !cpuChart || !gpuChart || !memoryChart || !diskIOChart) return
-  
-  const seconds = timeRange.value === '1m' ? 60 : timeRange.value === '5m' ? 300 : 900
-  
+const refreshCpuChart = async () => {
+  if (!selectedDevice.value || !cpuChart) return
+  const seconds = cpuTimeRange.value === '1m' ? 60 : cpuTimeRange.value === '5m' ? 300 : 900
   try {
-    const res = await fetch(`/api/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
-    const data = await res.json()
-    
+    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
     if (data.metrics && data.metrics.length > 0) {
       const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
-      const cpuData = data.metrics.map((m: any) => m.cpu_percent || 0)
-      const gpuData = data.metrics.map((m: any) => m.gpu_percent || 0)
-      const memoryData = data.metrics.map((m: any) => m.memory_percent || 0)
-      const diskReadData = data.metrics.map((m: any) => m.disk_read_mbps || 0)
-      const diskWriteData = data.metrics.map((m: any) => m.disk_write_mbps || 0)
-      gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0) / 1024) // Convert MB to GB
-      
+      const cpuData = data.metrics.map((m: any) => Number((m.cpu_percent || 0).toFixed(1)))
       cpuChart.setOption({
         xAxis: { data: timestamps },
         series: [{ data: cpuData }]
       })
+    }
+  } catch (e: any) {
+    console.error('Failed to load CPU chart data:', e)
+  }
+}
+
+const refreshGpuChart = async () => {
+  if (!selectedDevice.value || !gpuChart) return
+  const seconds = gpuTimeRange.value === '1m' ? 60 : gpuTimeRange.value === '5m' ? 300 : 900
+  try {
+    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    if (data.metrics && data.metrics.length > 0) {
+      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
       
-      gpuChart.setOption({
+      let seriesData = []
+      let yAxisFormatter = '{value}%'
+      let seriesName = 'GPU'
+      let maxVal = 100
+
+      if (gpuMetricType.value === 'memory') {
+        // VRAM usage in MB
+        seriesData = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0))
+        yAxisFormatter = '{value} MB'
+        seriesName = '显存'
+        // Dynamic max
+        maxVal = Math.max(...seriesData) * 1.2 || 1024
+        
+        // Try to get total VRAM for better max
+        if (currentDeviceInfo.value && currentDeviceInfo.value.gpu_vram_mb) {
+            maxVal = currentDeviceInfo.value.gpu_vram_mb
+        } else if (data.metrics[0].gpu_memory_total_mb) {
+            maxVal = data.metrics[0].gpu_memory_total_mb
+        }
+      } else {
+        // GPU Usage %
+      seriesData = data.metrics.map((m: any) => Number((m.gpu_percent || 0).toFixed(1)))
+      yAxisFormatter = '{value}%'
+      seriesName = 'GPU'
+      maxVal = 100
+      }
+
+      gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0) / 1024)
+      
+      const option: any = {
         xAxis: { data: timestamps },
-        series: [{ data: gpuData }]
+        yAxis: { max: maxVal, axisLabel: { formatter: yAxisFormatter } },
+        series: [{ 
+            name: seriesName,
+            data: seriesData,
+            areaStyle: { color: 'rgba(139, 92, 246, 0.2)' }
+        }]
+      }
+
+      // 显存模式下，不需要设置 max 为 100，如果是 usage 则需要
+      if (gpuMetricType.value === 'memory') {
+         delete option.yAxis.max
+         option.yAxis.axisLabel.formatter = '{value} MB'
+         // 但如果能拿到显存上限，最好设置一下
+         if (currentDeviceInfo.value && currentDeviceInfo.value.gpu_vram_mb) {
+             option.yAxis.max = currentDeviceInfo.value.gpu_vram_mb
+         }
+      } else {
+        option.yAxis.max = 100
+        option.yAxis.axisLabel.formatter = '{value}%'
+      }
+
+      gpuChart.setOption(option)
+    }
+  } catch (e: any) {
+    console.error('Failed to load GPU chart data:', e)
+  }
+}
+
+const refreshMemoryChart = async () => {
+  if (!selectedDevice.value || !memoryChart) return
+  const seconds = memoryTimeRange.value === '1m' ? 60 : memoryTimeRange.value === '5m' ? 300 : 900
+  try {
+    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    if (data.metrics && data.metrics.length > 0) {
+      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
+      const memoryData = data.metrics.map((m: any) => {
+        if (m.memory_percent) return Number(m.memory_percent.toFixed(1))
+        if (m.memory_used_mb && m.memory_available_mb) {
+          const total = m.memory_used_mb + m.memory_available_mb
+          return total > 0 ? Number((m.memory_used_mb / total * 100).toFixed(1)) : 0
+        }
+        return 0
       })
-      
       memoryChart.setOption({
         xAxis: { data: timestamps },
         series: [{ data: memoryData }]
       })
+    }
+  } catch (e: any) {
+    console.error('Failed to load Memory chart data:', e)
+  }
+}
+
+const refreshDiskChart = async () => {
+  if (!selectedDevice.value || !diskIOChart) return
+  const seconds = diskTimeRange.value === '1m' ? 60 : diskTimeRange.value === '5m' ? 300 : 900
+  try {
+    const { data } = await api.get(`/performance/metrics/realtime/${selectedDevice.value}?seconds=${seconds}`)
+    if (data.metrics && data.metrics.length > 0) {
+      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
       
+      // 更新磁盘选项
+      const allDisks = new Set<string>()
+      data.metrics.forEach((m: any) => {
+        if (m.disk_io_details && Array.isArray(m.disk_io_details)) {
+          m.disk_io_details.forEach((d: any) => allDisks.add(d.name))
+        }
+      })
+      if (allDisks.size > 0) {
+        const options = [{ label: '所有磁盘', value: 'all' }]
+        Array.from(allDisks).sort().forEach(name => {
+          // 过滤掉 _Total，因为已有"所有磁盘"选项，且 _Total 在此处略显冗余
+          if (name.includes('_Total')) return
+
+          // 移除开头的数字索引 (例如 "0 C:" -> "C:")
+          const label = name.replace(/^\d+\s+/, '')
+          options.push({ label: label, value: name })
+        })
+        // 只有当当前选项不在列表中时才重置
+        if (!options.find(o => o.value === selectedDisk.value)) {
+           // Keep selection if valid, otherwise default to all
+        }
+        diskOptions.value = options
+      }
+
+      let series = []
+      let yAxisFormatter: any = '{value}'
+
+      if (diskMetricType.value === 'throughput') {
+        yAxisFormatter = (value: number) => {
+            if (value >= 1024) return (value / 1024).toFixed(1) + ' GB/s'
+            return value.toFixed(1) + ' MB/s'
+        }
+        if (selectedDisk.value === 'all') {
+          const diskReadData = data.metrics.map((m: any) => m.disk_read_mbps || 0)
+          const diskWriteData = data.metrics.map((m: any) => m.disk_write_mbps || 0)
+          series = [
+            {
+              name: '总读取',
+              type: 'line',
+              smooth: true,
+              areaStyle: { color: 'rgba(245, 158, 11, 0.2)' },
+              lineStyle: { color: '#f59e0b' },
+              itemStyle: { color: '#f59e0b' },
+              data: diskReadData
+            },
+            {
+              name: '总写入',
+              type: 'line',
+              smooth: true,
+              areaStyle: { color: 'rgba(239, 68, 68, 0.2)' },
+              lineStyle: { color: '#ef4444' },
+              itemStyle: { color: '#ef4444' },
+              data: diskWriteData
+            }
+          ]
+        } else {
+          // Specific disk throughput
+          const diskReadData = data.metrics.map((m: any) => {
+            if (!m.disk_io_details || !Array.isArray(m.disk_io_details)) return 0
+            const detail = m.disk_io_details.find((d: any) => d.name === selectedDisk.value)
+            return detail ? (detail.read_bytes_sec / 1024 / 1024).toFixed(2) : 0
+          })
+          const diskWriteData = data.metrics.map((m: any) => {
+            if (!m.disk_io_details || !Array.isArray(m.disk_io_details)) return 0
+            const detail = m.disk_io_details.find((d: any) => d.name === selectedDisk.value)
+            return detail ? (detail.write_bytes_sec / 1024 / 1024).toFixed(2) : 0
+          })
+          series = [
+            {
+              name: '读取',
+              type: 'line',
+              smooth: true,
+              lineStyle: { color: '#f59e0b' },
+              data: diskReadData
+            },
+            {
+              name: '写入',
+              type: 'line',
+              smooth: true,
+              lineStyle: { color: '#ef4444' },
+              data: diskWriteData
+            }
+          ]
+        }
+      } else if (diskMetricType.value === 'iops') {
+        yAxisFormatter = '{value}'
+        // Show Queue Length
+        if (selectedDisk.value === 'all') {
+          // Average queue length across all disks? Or sum?
+          // Let's show avg queue length sum
+           const queueData = data.metrics.map((m: any) => {
+            if (!m.disk_io_details || !Array.isArray(m.disk_io_details)) return 0
+            return m.disk_io_details.reduce((acc: number, d: any) => acc + (d.queue_length || 0), 0).toFixed(2)
+          })
+          series = [{
+            name: '总队列长度',
+            type: 'line',
+            smooth: true,
+            areaStyle: { color: 'rgba(59, 130, 246, 0.2)' },
+            lineStyle: { color: '#3b82f6' },
+            data: queueData
+          }]
+        } else {
+           const queueData = data.metrics.map((m: any) => {
+            if (!m.disk_io_details || !Array.isArray(m.disk_io_details)) return 0
+            const detail = m.disk_io_details.find((d: any) => d.name === selectedDisk.value)
+            return detail ? (detail.queue_length || 0).toFixed(2) : 0
+          })
+          series = [{
+            name: '队列长度',
+            type: 'line',
+            smooth: true,
+            areaStyle: { color: 'rgba(59, 130, 246, 0.2)' },
+            lineStyle: { color: '#3b82f6' },
+            data: queueData
+          }]
+        }
+      } else if (diskMetricType.value === 'latency') {
+        yAxisFormatter = '{value} ms'
+        if (selectedDisk.value === 'all') {
+           // Avg latency
+           const latencyData = data.metrics.map((m: any) => {
+            if (!m.disk_io_details || !Array.isArray(m.disk_io_details) || m.disk_io_details.length === 0) return 0
+            const total = m.disk_io_details.reduce((acc: number, d: any) => acc + (d.latency_ms || 0), 0)
+            return (total / m.disk_io_details.length).toFixed(2)
+          })
+          series = [{
+            name: '平均延迟',
+            type: 'line',
+            smooth: true,
+            areaStyle: { color: 'rgba(16, 185, 129, 0.2)' },
+            lineStyle: { color: '#10b981' },
+            data: latencyData
+          }]
+        } else {
+           const latencyData = data.metrics.map((m: any) => {
+            if (!m.disk_io_details || !Array.isArray(m.disk_io_details)) return 0
+            const detail = m.disk_io_details.find((d: any) => d.name === selectedDisk.value)
+            return detail ? (detail.latency_ms || 0).toFixed(2) : 0
+          })
+          series = [{
+            name: '延迟',
+            type: 'line',
+            smooth: true,
+            areaStyle: { color: 'rgba(16, 185, 129, 0.2)' },
+            lineStyle: { color: '#10b981' },
+            data: latencyData
+          }]
+        }
+      }
+
       diskIOChart.setOption({
         xAxis: { data: timestamps },
-        series: [
-          { data: diskReadData },
-          { data: diskWriteData }
-        ]
-      })
+        yAxis: { type: 'value', axisLabel: { formatter: yAxisFormatter } },
+        series: series,
+        legend: { show: true, top: 0, itemWidth: 8, itemHeight: 8, data: series.map(s => s.name) } // Ensure legend is shown
+      }, { replaceMerge: ['series'] }) // merge: true (but here we want replace somewhat, so verify) 
     }
-  } catch (e) {
-    console.error('Failed to load chart data:', e)
+  } catch (e: any) {
+    console.error('Failed to load Disk chart data:', e)
   }
+}
+
+const refreshCharts = async () => {
+  await Promise.all([
+    refreshCpuChart(),
+    refreshGpuChart(),
+    refreshMemoryChart(),
+    refreshDiskChart()
+  ])
 }
 
 const initCharts = () => {
@@ -654,9 +1040,18 @@ const initCharts = () => {
     diskIOChart = echarts.init(diskIOChartRef.value)
     diskIOChart.setOption({
       tooltip: { trigger: 'axis' },
-      grid: { left: 40, right: 20, top: 20, bottom: 30 },
+      grid: { left: 50, right: 20, top: 30, bottom: 20 },
       xAxis: { type: 'category', data: [] },
-      yAxis: { type: 'value', axisLabel: { formatter: '{value} MB/s' } },
+      yAxis: { 
+        type: 'value', 
+        splitNumber: 3, 
+        axisLabel: { 
+          formatter: (value: number) => {
+            if (value >= 1024) return (value / 1024).toFixed(1) + ' GB/s'
+            return value + ' MB/s'
+          }
+        } 
+      },
       series: [
         {
           name: '读取',
@@ -682,6 +1077,11 @@ const initCharts = () => {
 }
 
 const onDeviceChange = () => {
+  // Update device info when selection changes
+  const device = deviceOptions.value.find(d => d.value === selectedDevice.value)
+  if (device) {
+    currentDeviceInfo.value = device
+  }
   loadMetrics()
   loadBenchmarks()
   loadAlerts()
@@ -703,10 +1103,7 @@ const runAIAnalysis = async () => {
   
   aiLoading.value = true
   try {
-    const res = await fetch(`/api/ai/analyze/metrics?device_id=${selectedDevice.value}&seconds=300`, {
-      method: 'POST'
-    })
-    const data = await res.json()
+    const { data } = await api.post(`/ai/analyze/metrics?device_id=${selectedDevice.value}&seconds=300`)
     aiAnalysis.value = data
   } catch (e) {
     console.error('Failed to run AI analysis:', e)
@@ -720,18 +1117,14 @@ const startBenchmark = async () => {
   
   startingBenchmark.value = true
   try {
-    await fetch('/api/performance/benchmarks/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        device_id: selectedDevice.value,
-        software_code: benchmarkForm.software_code,
-        benchmark_type: benchmarkForm.benchmark_type,
-        test_scene: benchmarkForm.test_scene,
-        pre_flight_check: benchmarkForm.pre_flight_check,
-        resource_limit_cpu: benchmarkForm.resource_limit_cpu,
-        resource_limit_mem: benchmarkForm.resource_limit_mem
-      })
+    await api.post('/performance/benchmarks/start', {
+      device_id: selectedDevice.value,
+      software_code: benchmarkForm.software_code,
+      benchmark_type: benchmarkForm.benchmark_type,
+      test_scene: benchmarkForm.test_scene,
+      pre_flight_check: benchmarkForm.pre_flight_check,
+      resource_limit_cpu: benchmarkForm.resource_limit_cpu,
+      resource_limit_mem: benchmarkForm.resource_limit_mem
     })
     showBenchmarkModal.value = false
     loadBenchmarks()
@@ -804,6 +1197,10 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.device-info-section {
+  margin-bottom: 24px;
 }
 
 /* Fix text visibility on white background */
@@ -892,6 +1289,29 @@ onUnmounted(() => {
   margin-top: 8px;
 }
 
+.chart-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chart-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
 .charts-section {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -956,6 +1376,33 @@ onUnmounted(() => {
   font-size: 14px;
   color: #64748b;
   margin: 0 0 12px 0;
+}
+
+/* Table border styling */
+:deep(.n-data-table) {
+  --n-border: 1px solid #e2e8f0 !important;
+}
+
+:deep(.n-data-table-th) {
+  border-bottom: 1px solid #e2e8f0 !important;
+  background-color: #f8fafc !important;
+  padding: 12px !important;
+}
+
+:deep(.n-data-table-td) {
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 12px !important;
+}
+
+:deep(.n-data-table-tr:hover) {
+  background-color: #f8fafc !important;
+}
+
+/* Benchmarks card table */
+.benchmarks-card :deep(.n-data-table) {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .bottom-section {

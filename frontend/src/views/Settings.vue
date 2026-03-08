@@ -49,6 +49,112 @@
           </n-card>
         </n-tab-pane>
 
+        <n-tab-pane name="data-retention" tab="数据保留">
+          <n-card class="settings-card">
+            <n-space vertical>
+              <n-alert type="info" style="margin-bottom: 16px">
+                配置性能指标、测试结果和审计日志的保留策略。企业级部署建议：性能指标保留30天，测试结果保留90天，审计日志保留180天。
+              </n-alert>
+              
+              <n-form label-placement="left" label-width="160px">
+                <n-form-item label="性能指标保留天数">
+                  <n-select
+                    v-model:value="retentionConfig.metrics_retention_days"
+                    :options="retentionOptions.metrics_retention_days_options.map(d => ({ label: d + ' 天', value: d }))"
+                    style="width: 200px"
+                  />
+                </n-form-item>
+                
+                <n-form-item label="测试结果保留天数">
+                  <n-select
+                    v-model:value="retentionConfig.results_retention_days"
+                    :options="retentionOptions.results_retention_days_options.map(d => ({ label: d + ' 天', value: d }))"
+                    style="width: 200px"
+                  />
+                </n-form-item>
+                
+                <n-form-item label="审计日志保留天数">
+                  <n-select
+                    v-model:value="retentionConfig.audit_logs_retention_days"
+                    :options="retentionOptions.audit_logs_retention_days_options.map(d => ({ label: d + ' 天', value: d }))"
+                    style="width: 200px"
+                  />
+                </n-form-item>
+                
+                <n-form-item label="采集间隔">
+                  <n-select
+                    v-model:value="retentionConfig.metrics_collection_interval"
+                    :options="retentionOptions.collection_interval_options.map(d => ({ label: d + ' 秒', value: d }))"
+                    style="width: 200px"
+                  />
+                </n-form-item>
+                
+                <n-form-item label="自动清理">
+                  <n-switch v-model:value="retentionConfig.enable_auto_cleanup" />
+                  <span style="margin-left: 8px; color: #64748b;">启用后每天自动清理过期数据</span>
+                </n-form-item>
+                
+                <n-form-item label="清理执行时间">
+                  <n-select
+                    v-model:value="retentionConfig.cleanup_hour"
+                    :options="retentionOptions.cleanup_hour_options.map(h => ({ label: h + ':00', value: h }))"
+                    style="width: 200px"
+                    :disabled="!retentionConfig.enable_auto_cleanup"
+                  />
+                </n-form-item>
+              </n-form>
+            </n-space>
+          </n-card>
+
+          <!-- Data Statistics -->
+          <n-card class="settings-card" title="数据统计" style="margin-top: 16px">
+            <n-grid :cols="4" :x-gap="16" :y-gap="16">
+              <n-gi>
+                <n-statistic label="性能指标记录">
+                  <template #default>{{ dataStats.total_metrics?.toLocaleString() || 0 }}</template>
+                </n-statistic>
+              </n-gi>
+              <n-gi>
+                <n-statistic label="测试结果记录">
+                  <template #default>{{ dataStats.total_test_results?.toLocaleString() || 0 }}</template>
+                </n-statistic>
+              </n-gi>
+              <n-gi>
+                <n-statistic label="审计日志记录">
+                  <template #default>{{ dataStats.total_audit_logs?.toLocaleString() || 0 }}</template>
+                </n-statistic>
+              </n-gi>
+              <n-gi>
+                <n-statistic label="预计释放空间">
+                  <template #default>{{ cleanupPreview.total_deleted?.toLocaleString() || 0 }}</template>
+                  <template #suffix>条记录</template>
+                </n-statistic>
+              </n-gi>
+            </n-grid>
+            
+            <n-space style="margin-top: 16px">
+              <n-button @click="previewCleanup">预览清理效果</n-button>
+              <n-button type="warning" @click="executeCleanup">立即清理</n-button>
+              <n-button @click="vacuumDatabase" :loading="vacuuming">VACUUM数据库</n-button>
+            </n-space>
+          </n-card>
+
+          <!-- Table Sizes -->
+          <n-card class="settings-card" title="各表数据量" style="margin-top: 16px">
+            <n-space vertical>
+              <n-space horizontal>
+                <n-button size="small" @click="loadDataSizes" :loading="loadingSizes">刷新</n-button>
+              </n-space>
+              <n-data-table
+                :columns="tableSizeColumns"
+                :data="tableSizeData"
+                :loading="loadingSizes"
+                :bordered="false"
+              />
+            </n-space>
+          </n-card>
+        </n-tab-pane>
+
         <n-tab-pane name="help" tab="测试说明">
           <n-card class="settings-card" title="测试类型说明">
             <n-space vertical>
@@ -140,10 +246,20 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
-import { NH1, NTabs, NTabPane, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NCheckbox, NSpace, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NText, NAlert, NTag, NIcon } from 'naive-ui'
+import { reactive, onMounted, computed, ref } from 'vue'
+import { 
+  NH1, NTabs, NTabPane, NCard, NForm, NFormItem, NInput, NInputNumber, 
+  NButton, NCheckbox, NSpace, NDescriptions, NDescriptionsItem, 
+  NCollapse, NCollapseItem, NText, NAlert, NTag, NIcon,
+  NSwitch, NSelect, NGrid, NGi, NStatistic, NDataTable
+} from 'naive-ui'
 import { Settings } from '@vicons/ionicons5'
+import { 
+  getRetentionConfig, getRetentionStats, getDataSizes, 
+  getRetentionOptions, runCleanup, vacuumDatabase as vacuumDbApi
+} from '@/api/dataRetention'
 
+// Settings state
 const settings = reactive({
   api_base_url: import.meta.env.VITE_API_BASE_URL || '/api',
   refresh_interval: 30,
@@ -156,6 +272,134 @@ const saveSettings = () => {
   localStorage.setItem('settings', JSON.stringify(settings))
   alert('设置已保存！')
 }
+
+// Data Retention state
+const retentionConfig = reactive({
+  metrics_retention_days: 30,
+  results_retention_days: 90,
+  audit_logs_retention_days: 180,
+  enable_auto_cleanup: true,
+  cleanup_hour: 2,
+  metrics_collection_interval: 5
+})
+
+const retentionOptions = reactive({
+  metrics_retention_days_options: [3, 7, 14, 30, 60, 90],
+  results_retention_days_options: [7, 14, 30, 60, 90, 180, 365],
+  audit_logs_retention_days_options: [30, 60, 90, 180, 365, 730],
+  collection_interval_options: [1, 5, 10, 30, 60],
+  cleanup_hour_options: Array.from({ length: 24 }, (_, i) => i)
+})
+
+const dataStats = reactive<Record<string, any>>({})
+const dataSizes = reactive<Record<string, number>>({})
+const cleanupPreview = reactive({ total_deleted: 0 })
+const loadingSizes = ref(false)
+const vacuuming = ref(false)
+
+// Table size columns
+const tableSizeColumns = [
+  { title: '表名', key: 'key' },
+  { 
+    title: '记录数', 
+    key: 'value',
+    render: (row: any) => row.value.toLocaleString()
+  }
+]
+
+const tableSizeData = computed(() => 
+  Object.entries(dataSizes).map(([key, value]) => ({ key, value }))
+)
+
+// Load data retention config
+const loadRetentionConfig = async () => {
+  try {
+    const { data } = await getRetentionConfig()
+    Object.assign(retentionConfig, data)
+  } catch (e) {
+    console.error('Failed to load retention config:', e)
+  }
+}
+
+// Load retention options
+const loadRetentionOptions = async () => {
+  try {
+    const { data } = await getRetentionOptions()
+    Object.assign(retentionOptions, data)
+  } catch (e) {
+    console.error('Failed to load retention options:', e)
+  }
+}
+
+// Load retention stats
+const loadRetentionStats = async () => {
+  try {
+    const { data } = await getRetentionStats()
+    Object.assign(dataStats, data)
+  } catch (e) {
+    console.error('Failed to load retention stats:', e)
+  }
+}
+
+// Load data sizes
+const loadDataSizes = async () => {
+  loadingSizes.value = true
+  try {
+    const { data } = await getDataSizes()
+    Object.assign(dataSizes, data)
+  } catch (e) {
+    console.error('Failed to load data sizes:', e)
+  } finally {
+    loadingSizes.value = false
+  }
+}
+
+// Preview cleanup
+const previewCleanup = async () => {
+  try {
+    const { data } = await runCleanup(true)
+    Object.assign(cleanupPreview, data)
+  } catch (e) {
+    console.error('Failed to preview cleanup:', e)
+  }
+}
+
+// Execute cleanup
+const executeCleanup = async () => {
+  if (!confirm('确定要清理过期数据吗？此操作不可撤销。')) return
+  try {
+    const { data } = await runCleanup(false)
+    alert(`清理完成！共删除 ${data.total_deleted} 条记录`)
+    await loadRetentionStats()
+    await loadDataSizes()
+  } catch (e) {
+    console.error('Failed to execute cleanup:', e)
+    alert('清理失败')
+  }
+}
+
+// Vacuum database
+const vacuumDatabase = async () => {
+  if (!confirm('确定要执行 VACUUM 操作吗？这可以帮助回收数据库空间。')) return
+  vacuuming.value = true
+  try {
+    const { data } = await vacuumDbApi()
+    alert(data.message)
+  } catch (e) {
+    console.error('Failed to vacuum database:', e)
+    alert('VACUUM 失败')
+  } finally {
+    vacuuming.value = false
+  }
+}
+
+onMounted(() => {
+  loadRetentionConfig()
+  loadRetentionOptions()
+  loadRetentionStats()
+  loadDataSizes()
+  previewCleanup()
+})
 </script>
 
 <style scoped>

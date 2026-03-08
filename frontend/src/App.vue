@@ -1,7 +1,4 @@
 <template>
-  <!-- Global Cursor Effect -->
-  <SleekLineCursor :trails="20" :size="50" />
-  
   <!-- Aurora Background -->
   <AuroraBackground class="aurora-bg">
   
