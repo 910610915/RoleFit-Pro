@@ -17,10 +17,11 @@ from sqlalchemy import (
     ForeignKey,
     JSON,
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship
+from app.core.database import Base
 
-# 创建独立的Base
-Base = declarative_base()
+# 创建独立的Base - REMOVED
+# Base = declarative_base()
 
 
 class User(Base):
@@ -34,6 +35,8 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=True, index=True)
     full_name = Column(String(100), nullable=True)
     role = Column(String(20), default="user")
+    role_id = Column(String(36), ForeignKey("roles.id"), nullable=True)
+    department_id = Column(String(36), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(
@@ -42,8 +45,29 @@ class User(Base):
 
     devices = relationship("Device", back_populates="owner")
     test_tasks = relationship("TestTask", back_populates="creator")
-    test_scripts = relationship("TestScript", back_populates="creator")
     audit_logs = relationship("AuditLog", back_populates="user")
+
+
+class Role(Base):
+    """角色模型"""
+
+    __tablename__ = "roles"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(50), unique=True, nullable=False)
+    code = Column(
+        String(50), unique=True, nullable=False
+    )  # admin, manager, user, viewer
+    description = Column(Text, nullable=True)
+    permissions = Column(
+        Text, nullable=True
+    )  # JSON: ["device:view", "device:manage", ...]
+    is_system = Column(Boolean, default=False)  # 系统内置角色
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class Device(Base):
@@ -86,6 +110,31 @@ class Device(Base):
     position = Column(String(100), nullable=True, index=True)
     assigned_to = Column(String(100), nullable=True)
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    # 设备画像 - 归属信息
+    employee_name = Column(String(100), nullable=True)  # 使用人
+    employee_id = Column(String(50), nullable=True)  # 员工编号
+    employee_email = Column(String(100), nullable=True)  # 员工邮箱
+
+    # 设备画像 - 采购信息
+    purchase_date = Column(DateTime(timezone=True), nullable=True)  # 采购日期
+    purchase_price = Column(Float, nullable=True)  # 采购价格
+    purchase_vendor = Column(String(200), nullable=True)  # 供应商
+    warranty_expire_date = Column(DateTime(timezone=True), nullable=True)  # 保修期到期
+    invoice_number = Column(String(100), nullable=True)  # 发票号
+
+    # 设备画像 - 资产信息
+    asset_tag = Column(String(100), nullable=True, index=True)  # 资产标签
+    serial_number = Column(String(100), nullable=True)  # 序列号
+    manufacturer = Column(String(100), nullable=True)  # 制造商
+    model = Column(String(100), nullable=True)  # 型号
+    location = Column(String(200), nullable=True)  # 物理位置
+
+    # 设备画像 - 使用统计
+    total_test_count = Column(Integer, default=0)  # 总测试次数
+    total_uptime_hours = Column(Float, default=0)  # 总运行时长(小时)
+    last_test_date = Column(DateTime(timezone=True), nullable=True)  # 最后测试时间
+    average_score = Column(Float, nullable=True)  # 平均得分
 
     # 状态
     status = Column(String(20), default="offline", index=True)
@@ -215,7 +264,7 @@ class TestScript(Base):
     )
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
-    creator = relationship("User", back_populates="test_scripts")
+    creator = relationship("User")
 
 
 class TestResult(Base):
@@ -530,6 +579,7 @@ class PerformanceMetric(Base):
 
     # 附加数据
     raw_data = Column(Text, nullable=True)  # 原始采集数据 JSON
+    disk_io_details = Column(Text, nullable=True)  # JSON: 磁盘详细IO信息 (队列, 延迟等)
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -708,3 +758,76 @@ class AIAnalysisReport(Base):
     analysis_duration_ms = Column(Integer, nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class AlertRule(Base):
+    """告警规则"""
+
+    __tablename__ = "alert_rules"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # 指标类型: cpu, gpu, memory, disk, network, health
+    metric_type = Column(String(50), nullable=False)
+
+    # 条件: gt (大于), lt (小于), eq (等于), gte (大于等于), lte (小于等于)
+    condition = Column(String(10), nullable=False)
+
+    # 阈值
+    threshold = Column(Float, nullable=False)
+
+    # 持续时间(秒)，持续超过阈值多长时间才触发告警
+    duration = Column(Integer, default=300)
+
+    # 严重程度: critical, warning, info
+    severity = Column(String(20), default="warning")
+
+    # 是否启用
+    enabled = Column(Boolean, default=True)
+
+    # 通知设置
+    notify_email = Column(Boolean, default=False)
+    notify_webhook = Column(Boolean, default=False)
+    webhook_url = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class ThirdPartyAPI(Base):
+    """第三方API配置"""
+
+    __tablename__ = "third_party_apis"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(100), nullable=False)
+    api_type = Column(
+        String(50), nullable=False
+    )  # asset_management, notification, webhook, im
+    base_url = Column(String(500), nullable=False)
+
+    # 认证信息 (加密存储)
+    api_key = Column(Text, nullable=True)
+    secret = Column(Text, nullable=True)
+    auth_type = Column(String(20), default="api_key")  # api_key, bearer, oauth, basic
+
+    # 额外配置
+    headers = Column(Text, nullable=True)  # JSON: 额外请求头
+    extra_params = Column(Text, nullable=True)  # JSON: 额外参数
+
+    enabled = Column(Boolean, default=True)
+    description = Column(Text, nullable=True)
+
+    # 测试状态
+    last_test_at = Column(DateTime(timezone=True), nullable=True)
+    last_test_status = Column(String(20), nullable=True)  # success, failed
+    last_test_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )

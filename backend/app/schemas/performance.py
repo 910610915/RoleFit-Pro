@@ -31,35 +31,6 @@ class PerformanceMetricBase(BaseModel):
     raw_data: Optional[str] = None
 
 
-class MetricDataCreate(BaseModel):
-    """单个指标数据 (用于批量创建)"""
-
-    model_config = ConfigDict(extra="allow")
-
-    timestamp: Optional[str] = None
-    cpu_percent: Optional[float] = None
-    cpu_temperature: Optional[float] = None
-    cpu_power_watts: Optional[float] = None
-    cpu_frequency_mhz: Optional[float] = None
-    gpu_percent: Optional[float] = None
-    gpu_temperature: Optional[float] = None
-    gpu_power_watts: Optional[float] = None
-    gpu_frequency_mhz: Optional[float] = None
-    gpu_memory_used_mb: Optional[float] = None
-    gpu_memory_total_mb: Optional[float] = None
-    memory_percent: Optional[float] = None
-    memory_used_mb: Optional[float] = None
-    memory_available_mb: Optional[float] = None
-    disk_read_mbps: Optional[float] = None
-    disk_write_mbps: Optional[float] = None
-    disk_io_percent: Optional[float] = None
-    network_sent_mbps: Optional[float] = None
-    network_recv_mbps: Optional[float] = None
-    process_count: Optional[int] = None
-    top_processes: Optional[str] = None
-    raw_data: Optional[str] = None
-
-
 class PerformanceMetricResponse(PerformanceMetricBase):
     id: str
     cpu_percent: Optional[float] = None
@@ -81,8 +52,9 @@ class PerformanceMetricResponse(PerformanceMetricBase):
     network_sent_mbps: Optional[float] = None
     network_recv_mbps: Optional[float] = None
     process_count: Optional[int] = None
-    top_processes: Optional[str] = None
+    top_processes: Optional[List[dict]] = None
     raw_data: Optional[str] = None
+    disk_io_details: Optional[List[dict]] = None
     created_at: datetime
 
     class Config:
@@ -333,12 +305,7 @@ class AIAnalysisReportListResponse(BaseModel):
     items: List[AIAnalysisReportResponse]
 
 
-# API Request/Response Schemas for batch operations
-class MetricsBatchCreate(BaseModel):
-    """批量创建性能指标"""
 
-    device_id: str
-    metrics: List[MetricDataCreate]
 
 
 class BenchmarkStartRequest(BaseModel):
