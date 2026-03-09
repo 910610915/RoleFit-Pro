@@ -15,9 +15,46 @@ class Settings(BaseSettings):
     app_name: str = "HardwareBenchmark"
     debug: bool = True
 
-    # Database (SQLite)
+    # ================================================
+    # Database Configuration
+    # ================================================
+    # 支持 SQLite (开发) / MySQL (生产) / PostgreSQL + TimescaleDB (大规模)
+    # 数据库类型: sqlite / mysql / postgresql
+    database_type: str = "sqlite"
+
+    # SQLite 配置
     database_url: str = "sqlite+aiosqlite:///./hardware_benchmark.db"
     database_url_sync: str = "sqlite:///./hardware_benchmark.db"
+
+    # MySQL 配置 (当 database_type = mysql 时使用)
+    mysql_host: str = "localhost"
+    mysql_port: int = 3306
+    mysql_user: str = "root"
+    mysql_password: str = ""
+    mysql_database: str = "hardware_benchmark"
+
+    @property
+    def mysql_url(self) -> str:
+        return f"mysql+aiomysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
+
+    @property
+    def mysql_url_sync(self) -> str:
+        return f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
+
+    # PostgreSQL 配置 (当 database_type = postgresql 时使用)
+    postgresql_host: str = "localhost"
+    postgresql_port: int = 5432
+    postgresql_user: str = "postgres"
+    postgresql_password: str = ""
+    postgresql_database: str = "hardware_benchmark"
+
+    @property
+    def postgresql_url(self) -> str:
+        return f"postgresql+asyncpg://{self.postgresql_user}:{self.postgresql_password}@{self.postgresql_host}:{self.postgresql_port}/{self.postgresql_database}"
+
+    @property
+    def postgresql_url_sync(self) -> str:
+        return f"postgresql://{self.postgresql_user}:{self.postgresql_password}@{self.postgresql_host}:{self.postgresql_port}/{self.postgresql_database}"
 
     # JWT
     secret_key: str = "your-secret-key-change-in-production"
