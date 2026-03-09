@@ -73,6 +73,9 @@ venv\Scripts\activate  # Windows
 # 安装依赖
 pip install -r requirements.txt
 
+# 初始化基础数据（首次运行）
+python init_basic_data.py
+
 # 启动服务
 uvicorn app.main:app --reload
 ```
