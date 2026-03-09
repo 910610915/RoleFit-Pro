@@ -120,10 +120,10 @@ def device_heartbeat(
     if not device:
         logger.info(f"Device not found, auto-registering: {heartbeat_data.mac_address}")
         device = Device(
-            device_name=heartbeat_data.mac_address[:8],
+            device_name=heartbeat_data.hostname or heartbeat_data.mac_address[:8],
             mac_address=heartbeat_data.mac_address,
             ip_address="",
-            hostname="",
+            hostname=heartbeat_data.hostname or "",
             status=heartbeat_data.status,
             last_seen_at=datetime.utcnow(),
         )
@@ -135,6 +135,12 @@ def device_heartbeat(
     # Update device status
     device.status = heartbeat_data.status
     device.last_seen_at = datetime.utcnow()
+
+    # Update hostname and device_name if provided
+    if heartbeat_data.hostname:
+        device.hostname = heartbeat_data.hostname
+    if heartbeat_data.device_name:
+        device.device_name = heartbeat_data.device_name
 
     # Update hardware info if provided in system_info
     if heartbeat_data.system_info:

@@ -228,9 +228,12 @@ class HardwareBenchmarkAgent:
             return
 
         try:
+            hostname = self.get_hostname()
             payload = {
                 "mac_address": self.get_mac_address(),
                 "status": status,
+                "hostname": hostname,
+                "device_name": hostname,
             }
 
             if current_task_id:

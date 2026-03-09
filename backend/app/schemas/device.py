@@ -103,5 +103,7 @@ class AgentRegisterRequest(BaseModel):
 class AgentHeartbeatRequest(BaseModel):
     mac_address: str
     status: str
+    hostname: Optional[str] = None
+    device_name: Optional[str] = None
     current_task_id: Optional[str] = None
     system_info: Optional[dict] = None
