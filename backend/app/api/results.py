@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
-from typing import Optional, List
+from sqlalchemy.orm import selectinload
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
@@ -68,7 +69,7 @@ async def list_results(
     db: AsyncSession = Depends(get_db),
 ):
     """Get test result list"""
-    query = select(TestResult)
+    query = select(TestResult).options(selectinload(TestResult.device))
 
     if device_id:
         query = query.where(TestResult.device_id == device_id)
@@ -97,11 +98,20 @@ async def list_results(
     result = await db.execute(query)
     results = result.scalars().all()
 
+    # Build response with device_name
+    items = []
+    for r in results:
+        item = TestResultResponse.model_validate(r)
+        # Add device_name from relationship
+        item_dict = item.model_dump()
+        item_dict["device_name"] = r.device.device_name if r.device else None
+        items.append(TestResultResponse(**item_dict))
+
     return TestResultListResponse(
         total=total,
         page=page,
         page_size=page_size,
-        items=[TestResultResponse.model_validate(r) for r in results],
+        items=items,
     )
 
 

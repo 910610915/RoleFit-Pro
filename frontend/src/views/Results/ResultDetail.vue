@@ -60,7 +60,11 @@
 
       <!-- 性能趋势图表区域 -->
       <n-card title="性能监控趋势" class="mb-5">
-        <n-tabs type="line" animated>
+        <!-- 无数据提示 -->
+        <n Alert v-if="!hasMetricsData" type="warning" show-icon>
+          暂无性能监控数据。该测试任务未收集详细的运行时指标数据。
+        </n-alert>
+        <n-tabs v-else type="line" animated>
           <!-- CPU 监控 -->
           <n-tab-pane name="cpu" tab="CPU 监控">
             <n-grid :cols="3" :x-gap="15" :y-gap="15">
@@ -190,7 +194,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NButton, NCard, NGrid, NGi, NDescriptions, NDescriptionsItem, NTag, NIcon, NSpin, NTabs, NTabPane, NProgress, NSpace, NLi } from 'naive-ui'
+import { NButton, NCard, NGrid, NGi, NDescriptions, NDescriptionsItem, NTag, NIcon, NSpin, NTabs, NTabPane, NProgress, NSpace, NLi, NAlert } from 'naive-ui'
 import { ArrowBack, CheckmarkCircle, Download } from '@vicons/ionicons5'
 import * as echarts from 'echarts'
 import { resultApi, type TestResult } from '@/api/results'
@@ -218,37 +222,28 @@ const overviewChart = ref<HTMLElement>()
 const result = reactive<TestResult>({
   id: '',
   device_id: '',
+  device_name: '',
   start_time: '',
   end_time: '',
   duration_seconds: 0,
   created_at: ''
 })
 
-// 模拟的性能数据（实际项目中应该从API获取）
-const generateMockMetrics = () => {
-  const duration = result.duration_seconds || 60
-  const points = Math.min(duration, 100)
-  const data: any = []
-  
-  for (let i = 0; i < points; i++) {
-    data.push({
-      time: i,
-      cpuPercent: 30 + Math.random() * 50 + Math.sin(i / 10) * 20,
-      cpuTemp: 45 + Math.random() * 25 + Math.sin(i / 15) * 10,
-      cpuPower: 15 + Math.random() * 35 + Math.sin(i / 8) * 15,
-      gpuPercent: 20 + Math.random() * 60 + Math.cos(i / 12) * 25,
-      gpuTemp: 35 + Math.random() * 30 + Math.cos(i / 18) * 12,
-      gpuMemory: 1024 + Math.random() * 2048 + Math.sin(i / 20) * 512,
-      memoryPercent: 40 + Math.random() * 30 + Math.sin(i / 25) * 10,
-      memoryMB: 8192 + Math.random() * 4096,
-      diskRead: 500 + Math.random() * 1500 + Math.sin(i / 5) * 300,
-      diskWrite: 300 + Math.random() * 1200 + Math.cos(i / 7) * 250,
-    })
-  }
-  return data
+// 性能指标数据结构（与后端 PerformanceMetric 对应）
+interface PerformanceMetric {
+  time: string
+  cpuPercent?: number
+  cpuTemp?: number
+  gpuPercent?: number
+  gpuTemp?: number
+  memoryPercent?: number
+  memoryMB?: number
+  diskRead?: number
+  diskWrite?: number
 }
 
-const metricsData = ref<any[]>([])
+const metricsData = ref<PerformanceMetric[]>([])
+const hasMetricsData = ref(false)
 
 // 组件分数
 const componentScores = computed(() => [
@@ -396,57 +391,56 @@ const createOverviewChart = () => {
 
 // 初始化所有图表
 const initCharts = () => {
-  if (metricsData.value.length === 0) {
-    metricsData.value = generateMockMetrics()
+  // 如果没有真实数据，不初始化图表（显示空状态）
+  if (!hasMetricsData.value || metricsData.value.length === 0) {
+    return
   }
   
   nextTick(() => {
     // CPU 图表
     if (cpuUsageChart.value) {
       createLineChart(cpuUsageChart.value, 'CPU占用', 
-        metricsData.value.map(d => d.cpuPercent), '#2080f0', '%')
+        metricsData.value.map(d => d.cpuPercent ?? 0), '#2080f0', '%')
     }
     if (cpuTempChart.value) {
       createLineChart(cpuTempChart.value, 'CPU温度', 
-        metricsData.value.map(d => d.cpuTemp), '#ff5722', '°C')
+        metricsData.value.map(d => d.cpuTemp ?? 0), '#ff5722', '°C')
     }
     if (cpuPowerChart.value) {
-      createLineChart(cpuPowerChart.value, 'CPU功耗', 
-        metricsData.value.map(d => d.cpuPower), '#795548', 'W')
+      // CPU功耗数据可能不存在于API返回中，跳过此图表
     }
     
     // GPU 图表
     if (gpuUsageChart.value) {
       createLineChart(gpuUsageChart.value, 'GPU占用', 
-        metricsData.value.map(d => d.gpuPercent), '#f0a020', '%')
+        metricsData.value.map(d => d.gpuPercent ?? 0), '#f0a020', '%')
     }
     if (gpuTempChart.value) {
       createLineChart(gpuTempChart.value, 'GPU温度', 
-        metricsData.value.map(d => d.gpuTemp), '#e91e63', '°C')
+        metricsData.value.map(d => d.gpuTemp ?? 0), '#e91e63', '°C')
     }
     if (gpuMemoryChart.value) {
-      createLineChart(gpuMemoryChart.value, 'GPU显存', 
-        metricsData.value.map(d => d.gpuMemory / 1024), '#9c27b0', 'GB')
+      // GPU显存数据可能不存在于API返回中，跳过此图表
     }
     
     // 内存图表
     if (memoryChart.value) {
       createLineChart(memoryChart.value, '内存占用', 
-        metricsData.value.map(d => d.memoryPercent), '#18a058', '%')
+        metricsData.value.map(d => d.memoryPercent ?? 0), '#18a058', '%')
     }
     if (memoryMBChart.value) {
       createLineChart(memoryMBChart.value, '内存使用', 
-        metricsData.value.map(d => d.memoryMB), '#00bcd4', 'MB')
+        metricsData.value.map(d => d.memoryMB ?? 0), '#00bcd4', 'MB')
     }
     
     // 磁盘图表
     if (diskReadChart.value) {
       createLineChart(diskReadChart.value, '读取速度', 
-        metricsData.value.map(d => d.diskRead), '#9c27b0', 'MB/s')
+        metricsData.value.map(d => d.diskRead ?? 0), '#9c27b0', 'MB/s')
     }
     if (diskWriteChart.value) {
       createLineChart(diskWriteChart.value, '写入速度', 
-        metricsData.value.map(d => d.diskWrite), '#e91e63', 'MB/s')
+        metricsData.value.map(d => d.diskWrite ?? 0), '#e91e63', 'MB/s')
     }
     
     // 综合趋势图
@@ -460,14 +454,18 @@ const loadResult = async () => {
     const res = await resultApi.get(resultId)
     Object.assign(result, res.data)
     
-    // 尝试获取真实指标数据
+    // 获取真实性能指标数据
     try {
       const metricsRes = await resultApi.getMetrics(resultId)
       if (metricsRes.data && metricsRes.data.length > 0) {
         metricsData.value = metricsRes.data
+        hasMetricsData.value = true
+      } else {
+        hasMetricsData.value = false
       }
     } catch (e) {
-      console.log('使用模拟数据')
+      console.warn('No metrics data available for this result')
+      hasMetricsData.value = false
     }
     
     initCharts()

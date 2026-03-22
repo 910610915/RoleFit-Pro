@@ -101,17 +101,34 @@ class TaskExecutor:
             logger.error(f"Failed to report task error: {e}")
             return False
 
-    def submit_test_result(self, result_data: Dict[str, Any]) -> bool:
-        """上报测试结果"""
+    def submit_test_result(self, result_data: Dict[str, Any]) -> Dict[str, Any]:
+        """上报测试结果，返回结果ID或错误信息"""
         try:
             url = f"{self.server_url}/api/results"
             response = requests.post(
                 url, json=result_data, headers=self._get_headers(), timeout=30
             )
-            return response.status_code in [200, 201]
+
+            if response.status_code in [200, 201]:
+                result = response.json()
+                result_id = result.get("id")
+                logger.info(f"Test result submitted successfully: {result_id}")
+                return {"success": True, "result_id": result_id, "data": result}
+            else:
+                error_msg = (
+                    f"Failed to submit result: {response.status_code} - {response.text}"
+                )
+                logger.error(error_msg)
+                return {"success": False, "error": error_msg}
+
+        except requests.exceptions.Timeout:
+            error_msg = "Submit result timeout"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
         except Exception as e:
-            logger.error(f"Failed to submit test result: {e}")
-            return False
+            error_msg = f"Failed to submit test result: {e}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
 
     def execute_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """执行单个测试任务"""
@@ -176,12 +193,26 @@ class TaskExecutor:
             if "bottleneck" in result:
                 result_data["bottleneck_type"] = result.get("bottleneck")
 
-            # 上报结果
-            self.submit_test_result(result_data)
+            # 上报结果并检查是否成功
+            submit_result = self.submit_test_result(result_data)
 
-            # 标记任务完成
-            task_status = "failed" if "error" in result else "completed"
-            self.mark_task_complete(task_id, task_status)
+            # 如果结果提交失败，标记任务为部分完成但记录错误
+            if not submit_result.get("success"):
+                error_msg = submit_result.get(
+                    "error", "Unknown error submitting result"
+                )
+                logger.error(f"Failed to submit test result: {error_msg}")
+                # 将错误信息添加到 result 中
+                result["submit_error"] = error_msg
+                result["submit_result_id"] = submit_result.get("result_id")
+
+                # 即使提交失败也标记任务完成，但记录状态
+                task_status = "completed" if "error" not in result else "failed"
+                self.mark_task_complete(task_id, task_status)
+            else:
+                # 标记任务完成
+                task_status = "failed" if "error" in result else "completed"
+                self.mark_task_complete(task_id, task_status)
 
             logger.info(f"Task {task_id} completed with status: {task_status}")
             return result

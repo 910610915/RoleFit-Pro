@@ -75,15 +75,13 @@ const pagination = ref({
 const statusOptions = [
   { label: '通过', value: 'passed' },
   { label: '失败', value: 'failed' },
-  { label: '警告', value: 'warning' },
-  { label: '部分通过', value: 'partial' }
+  { label: '警告', value: 'warning' }
 ]
 
 const statusText: Record<string, string> = {
   passed: '通过',
   failed: '失败',
-  warning: '警告',
-  partial: '部分通过'
+  warning: '警告'
 }
 
 const getStatusText = (status: string | undefined) => {

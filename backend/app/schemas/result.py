@@ -27,6 +27,7 @@ class TestResultUpdate(BaseModel):
 
 class TestResultResponse(TestResultBase):
     id: str
+    device_name: Optional[str] = None  # 关联查询的设备名称
     overall_score: Optional[float] = None
     cpu_score: Optional[float] = None
     gpu_score: Optional[float] = None
@@ -43,7 +44,13 @@ class TestResultResponse(TestResultBase):
     log_file_path: Optional[str] = None
     created_at: datetime
 
-    @field_validator('fail_reasons', 'performance_summary', 'bottleneck_detail', 'upgrade_suggestion', mode='before')
+    @field_validator(
+        "fail_reasons",
+        "performance_summary",
+        "bottleneck_detail",
+        "upgrade_suggestion",
+        mode="before",
+    )
     @classmethod
     def parse_json_string(cls, v):
         if isinstance(v, str) and v:

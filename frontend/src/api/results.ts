@@ -4,6 +4,7 @@ export interface TestResult {
   id: string
   task_id?: string
   device_id: string
+  device_name?: string
   test_type?: string
   test_status?: string
   start_time: string
