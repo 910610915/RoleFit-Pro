@@ -1,6 +1,16 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
+
+
+class ProcessInfo(BaseModel):
+    """Process information schema"""
+
+    name: str
+    pid: int
+    cpu: float
+    memory: float
+    path: Optional[str] = ""
 
 
 class PerformanceMetricBase(BaseModel):
@@ -27,7 +37,7 @@ class PerformanceMetricBase(BaseModel):
     network_sent_mbps: Optional[float] = None
     network_recv_mbps: Optional[float] = None
     process_count: Optional[int] = None
-    top_processes: Optional[str] = None
+    top_processes: Optional[str] = None  # JSON string when stored
     raw_data: Optional[str] = None
 
 
@@ -355,7 +365,7 @@ class AIAnalysisRequest(BaseModel):
     title: Optional[str] = None
     metrics_period_hours: int = 24  # 分析最近多少小时的数据
     include_benchmarks: bool = True
-    
+
     # Dynamic Credentials
     api_key: Optional[str] = None
     model: Optional[str] = None
@@ -365,10 +375,10 @@ class AIAnalysisRequest(BaseModel):
 
 class AIAnalysisMetricsRequest(BaseModel):
     """AI实时指标分析请求"""
-    
+
     device_id: str
     seconds: int = 60
-    
+
     # Dynamic Credentials
     api_key: Optional[str] = None
     model: Optional[str] = None

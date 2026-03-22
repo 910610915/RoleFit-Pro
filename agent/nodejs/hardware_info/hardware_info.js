@@ -159,6 +159,7 @@ async function getHardwareInfo() {
 function getNvidiaGpuMetrics() {
   return new Promise((resolve) => {
     const { exec } = require('child_process');
+    // Query: utilization.gpu (%), utilization.memory (%), memory.used (MiB), memory.total (MiB), temperature.gpu (C)
     exec('nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits', 
       { timeout: 5000 },
       (error, stdout, stderr) => {
@@ -168,8 +169,23 @@ function getNvidiaGpuMetrics() {
         }
         
         try {
-          const parts = stdout.trim().split(',').map(s => parseFloat(s.trim()));
-          if (parts.length >= 5 && !isNaN(parts[0])) {
+          // Get first line (first GPU) and clean up
+          const firstLine = stdout.trim().split('\n')[0];
+          // Split by comma and clean each part - remove % sign, MiB, etc.
+          const parts = firstLine.split(',').map(s => {
+            const cleaned = s.trim()
+              .replace(/%/g, '')
+              .replace(/MiB/g, '')
+              .replace(/Mi/g, '')
+              .replace(/GiB/g, '')
+              .replace(/Gi/g, '')
+              .replace(/W/i, '')
+              .replace(/MHz/g, '')
+              .trim();
+            return parseFloat(cleaned);
+          });
+          
+          if (parts.length >= 5 && !isNaN(parts[0]) && parts[0] >= 0 && parts[0] <= 100) {
             resolve({
               percent: parts[0],
               memory_percent: parts[1],
@@ -178,7 +194,19 @@ function getNvidiaGpuMetrics() {
               temperature: parts[4]
             });
           } else {
-            resolve(null);
+            // Try alternative parsing for different nvidia-smi versions
+            const nums = firstLine.match(/[\d.]+/g);
+            if (nums && nums.length >= 5) {
+              resolve({
+                percent: parseFloat(nums[0]),
+                memory_percent: parseFloat(nums[1]),
+                memory_used_mb: parseFloat(nums[2]),
+                memory_total_mb: parseFloat(nums[3]),
+                temperature: parseFloat(nums[4])
+              });
+            } else {
+              resolve(null);
+            }
           }
         } catch (e) {
           resolve(null);
