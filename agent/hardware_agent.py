@@ -70,11 +70,12 @@ class HardwareBenchmarkAgent:
         # Import Performance Monitor
         try:
             from hardware_monitor import PerformanceMonitor
+
             self.PerformanceMonitor = PerformanceMonitor
         except ImportError:
             logger.warning("Performance Monitor not available")
             self.PerformanceMonitor = None
-            
+
         self.monitor = None
         self.monitor_thread = None
 
@@ -160,9 +161,9 @@ class HardwareBenchmarkAgent:
                 logger.error("Failed to get hardware info from Node.js")
                 return None
 
-            # Get network info
-            mac_address = self.get_mac_address()
-            ip_address = self.get_ip_address()
+            # Get network info - use Node.js detected values to ensure consistency
+            mac_address = hardware_info.get("mac_address") or self.get_mac_address()
+            ip_address = hardware_info.get("ip_address") or self.get_ip_address()
             hostname = self.get_hostname()
 
             # Build registration payload
@@ -455,7 +456,9 @@ class HardwareBenchmarkAgent:
         if self.PerformanceMonitor and self.device_id:
             logger.info("Starting performance monitor...")
             try:
-                self.monitor = self.PerformanceMonitor(self.device_id, self.server_url, self.api_key)
+                self.monitor = self.PerformanceMonitor(
+                    self.device_id, self.server_url, self.api_key
+                )
                 self.monitor_thread = threading.Thread(target=self.monitor.run)
                 self.monitor_thread.daemon = True
                 self.monitor_thread.start()

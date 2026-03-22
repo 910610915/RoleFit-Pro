@@ -1,0 +1,66 @@
+{
+  "version": "1.0",
+  "description": "Position Configuration",
+  "data": [
+    {
+      "id": "2f20ba4a-899a-41a6-a263-25b4f2b76342",
+      "position_name": "视频编导",
+      "position_code": "video",
+      "department": "研发部",
+      "description": "视频编导岗位",
+      "is_active": 1,
+      "created_at": "2026-03-22T12:47:27",
+      "updated_at": "2026-03-22T12:47:27"
+    },
+    {
+      "id": "905d480d-f237-4805-b738-195552a65bea",
+      "position_name": "程序开发",
+      "position_code": "programmer",
+      "department": "研发部",
+      "description": "程序开发岗位",
+      "is_active": 1,
+      "created_at": "2026-03-22T12:47:27",
+      "updated_at": "2026-03-22T12:47:27"
+    },
+    {
+      "id": "964b0a98-ddcb-472a-ade4-f5b11c8d82b2",
+      "position_name": "关卡设计",
+      "position_code": "level_designer",
+      "department": "研发部",
+      "description": "关卡设计岗位",
+      "is_active": 1,
+      "created_at": "2026-03-22T12:47:27",
+      "updated_at": "2026-03-22T12:47:27"
+    },
+    {
+      "id": "da9679f8-5c16-491e-85fd-3f02885466b1",
+      "position_name": "特效设计",
+      "position_code": "vfx",
+      "department": "研发部",
+      "description": "特效设计岗位",
+      "is_active": 1,
+      "created_at": "2026-03-22T12:47:27",
+      "updated_at": "2026-03-22T12:47:27"
+    },
+    {
+      "id": "de99ae52-d4d7-46b9-8a9a-3a3a340131c6",
+      "position_name": "技术美术",
+      "position_code": "ta",
+      "department": "研发部",
+      "description": "技术美术岗位",
+      "is_active": 1,
+      "created_at": "2026-03-22T12:47:27",
+      "updated_at": "2026-03-22T12:47:27"
+    },
+    {
+      "id": "e054b21a-e1fa-48d4-b54e-448c2519df43",
+      "position_name": "美术设计",
+      "position_code": "artist",
+      "department": "研发部",
+      "description": "美术设计岗位",
+      "is_active": 1,
+      "created_at": "2026-03-22T12:47:27",
+      "updated_at": "2026-03-22T12:47:27"
+    }
+  ]
+}

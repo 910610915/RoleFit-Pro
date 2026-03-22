@@ -11,7 +11,7 @@ from datetime import datetime
 
 from sqlalchemy import select, func
 from app.core.database import SyncSessionLocal
-from app.models.sqlite import JobScript, TestSoftware
+from app.models.sqlite import JobScript, TestSoftware, Position
 
 
 def get_data_path(filename: str) -> str:
@@ -129,6 +129,40 @@ def init_basic_data():
             print(f"加载了 {len(script_data['data'])} 个脚本")
         else:
             print("  警告: 未找到脚本数据文件 data/job_scripts.json")
+
+        # ==================== 加载岗位数据 ====================
+        print("\n[3/3] 加载岗位数据...")
+        position_data = load_json_data("positions.json")
+
+        if position_data and "data" in position_data:
+            for pos in position_data["data"]:
+                # 检查是否已存在（通过 position_code）
+                existing = (
+                    session.query(Position)
+                    .filter_by(position_code=pos["position_code"])
+                    .first()
+                )
+
+                if not existing:
+                    pos_obj = Position(
+                        id=pos.get("id", str(uuid.uuid4())),
+                        position_name=pos["position_name"],
+                        position_code=pos["position_code"],
+                        department=pos.get("department", "研发部"),
+                        description=pos.get(
+                            "description", f"{pos['position_name']}岗位"
+                        ),
+                        is_active=pos.get("is_active", True),
+                    )
+                    session.add(pos_obj)
+                    print(f"  + 添加岗位: {pos['position_name']}")
+                else:
+                    print(f"  * 已存在: {pos['position_name']}")
+
+            session.commit()
+            print(f"加载了 {len(position_data['data'])} 个岗位")
+        else:
+            print("  警告: 未找到岗位数据文件 data/positions.json")
 
         print("\n基础数据初始化完成！")
 
