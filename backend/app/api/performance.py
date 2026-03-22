@@ -64,7 +64,63 @@ router = APIRouter(prefix="/performance", tags=["Performance"])
     status_code=status.HTTP_201_CREATED,
 )
 def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
-    """创建性能指标"""
+    """
+    Create a new performance metric entry for a device.
+    
+    Records detailed hardware performance data including CPU, GPU, memory, disk, and network statistics
+    for monitoring and analysis purposes.
+    
+    Args:
+        metric (MetricDataCreate): The performance metric data containing:
+            - device_id (str): Unique identifier of the device
+            - cpu_percent (float, optional): CPU utilization percentage (0-100)
+            - cpu_temperature (float, optional): CPU temperature in Celsius
+            - cpu_power_watts (float, optional): CPU power consumption in watts
+            - cpu_frequency_mhz (float, optional): CPU frequency in MHz
+            - gpu_percent (float, optional): GPU utilization percentage (0-100)
+            - gpu_temperature (float, optional): GPU temperature in Celsius
+            - gpu_power_watts (float, optional): GPU power consumption in watts
+            - gpu_frequency_mhz (float, optional): GPU frequency in MHz
+            - gpu_memory_used_mb (float, optional): GPU memory used in MB
+            - gpu_memory_total_mb (float, optional): GPU total memory in MB
+            - memory_percent (float, optional): Memory utilization percentage (0-100)
+            - memory_used_mb (float, optional): Memory used in MB
+            - memory_available_mb (float, optional): Memory available in MB
+            - disk_read_mbps (float, optional): Disk read speed in MB/s
+            - disk_write_mbps (float, optional): Disk write speed in MB/s
+            - disk_io_percent (float, optional): Disk I/O utilization percentage
+            - network_sent_mbps (float, optional): Network send speed in Mbps
+            - network_recv_mbps (float, optional): Network receive speed in Mbps
+            - process_count (int, optional): Number of running processes
+            - top_processes (list, optional): List of top resource-consuming processes
+            - disk_io_details (list, optional): Detailed disk I/O information per partition
+            - raw_data (dict, optional): Raw metric data for extensibility
+            - timestamp (datetime, optional): Metric timestamp (defaults to current UTC time)
+        
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        PerformanceMetricResponse: The created performance metric with all fields including:
+            - id (int): Unique metric identifier
+            - device_id (str): Device identifier
+            - timestamp (datetime): Metric timestamp
+            - All performance metric fields as stored in the database
+    
+    Raises:
+        HTTPException: None (validation errors handled by FastAPI automatically)
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/metrics" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "device_id": "dev-001",
+            "cpu_percent": 45.5,
+            "memory_percent": 62.3,
+            "gpu_percent": 78.2
+          }'
+        ```
+    """
     import json
 
     data = metric
@@ -126,7 +182,39 @@ def create_metric(metric: MetricDataCreate, db: Session = Depends(get_db_sync)):
 
 @router.post("/metrics/batch", status_code=status.HTTP_201_CREATED)
 def create_metrics_batch(batch: MetricsBatchCreate, db: Session = Depends(get_db_sync)):
-    """批量创建性能指标"""
+    """
+    Create multiple performance metrics in a single batch operation.
+    
+    Efficiently records multiple metric data points for a device in one request,
+    useful for bulk data imports or uploading cached metrics.
+    
+    Args:
+        batch (MetricsBatchCreate): Batch containing:
+            - device_id (str): Target device identifier for all metrics
+            - metrics (list[MetricDataCreate]): List of metric data points to create
+            
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        dict: Batch creation result containing:
+            - created (int): Number of metrics successfully created
+    
+    Raises:
+        HTTPException: None (validation errors handled by FastAPI automatically)
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/metrics/batch" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "device_id": "dev-001",
+            "metrics": [
+              {"cpu_percent": 45.5, "memory_percent": 62.3},
+              {"cpu_percent": 48.1, "memory_percent": 63.1}
+            ]
+          }'
+        ```
+    """
     import json
     from datetime import datetime
 
@@ -182,7 +270,37 @@ def get_metrics(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db_sync),
 ):
-    """获取性能指标列表"""
+    """
+    Retrieve a paginated list of performance metrics for a specific device.
+
+    Queries historical performance data with optional time range filtering,
+    sorted by timestamp in descending order (newest first).
+
+    Args:
+        device_id (str): Unique identifier of the device to fetch metrics for
+        start_time (datetime, optional): Filter metrics recorded after this time (inclusive)
+        end_time (datetime, optional): Filter metrics recorded before this time (inclusive)
+        limit (int): Maximum number of metrics to return (default: 100, range: 1-1000)
+        offset (int): Number of metrics to skip for pagination (default: 0)
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        PerformanceMetricListResponse: Paginated response containing:
+            - total (int): Total number of metrics matching the query
+            - items (list[PerformanceMetric]): List of performance metrics
+
+    Raises:
+        HTTPException: None (returns empty list if no metrics found)
+
+    Example:
+        ```bash
+        # Get latest 50 metrics for a device
+        curl "http://localhost:8000/api/performance/metrics?device_id=dev-001&limit=50"
+
+        # Get metrics within a time range
+        curl "http://localhost:8000/api/performance/metrics?device_id=dev-001&start_time=2024-01-01T00:00:00&end_time=2024-01-02T00:00:00"
+        ```
+    """
     query = select(PerformanceMetric).where(PerformanceMetric.device_id == device_id)
 
     if start_time:
@@ -205,7 +323,34 @@ def get_metrics(
 
 @router.get("/metrics/latest", response_model=PerformanceMetricResponse)
 def get_latest_metric(device_id: str, db: Session = Depends(get_db_sync)):
-    """获取设备最新性能指标"""
+    """
+    Retrieve the most recent performance metric for a specific device.
+
+    Returns the latest recorded metric based on timestamp, useful for
+    displaying current device status in dashboards or实时 views.
+
+    Args:
+        device_id (str): Unique identifier of the device to fetch the latest metric for
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        PerformanceMetricResponse: The most recent performance metric including:
+            - id (int): Unique metric identifier
+            - device_id (str): Device identifier
+            - timestamp (datetime): Metric timestamp
+            - cpu_percent (float): CPU utilization percentage
+            - gpu_percent (float): GPU utilization percentage
+            - memory_percent (float): Memory utilization percentage
+            - All other performance metric fields
+
+    Raises:
+        HTTPException: 404 Not Found if no metrics exist for the specified device
+
+    Example:
+        ```bash
+        curl "http://localhost:8000/api/performance/metrics/latest?device_id=dev-001"
+        ```
+    """
     import json
 
     result = db.execute(
@@ -276,7 +421,41 @@ def get_realtime_metrics(
     end_time: Optional[datetime] = Query(None, description="结束时间 (ISO格式)"),
     db: Session = Depends(get_db_sync),
 ):
-    """获取实时性能指标 (最近N秒) 或指定时间范围"""
+    """
+    Retrieve realtime or historical performance metrics for a device with calculated averages.
+
+    Returns metrics within a specified time window, either as recent N seconds or
+    a custom time range. Includes calculated average values for key metrics.
+
+    Args:
+        device_id (str): Unique identifier of the device
+        seconds (int): Time window in seconds for recent metrics (default: 60, range: 10-3600)
+            Ignored if start_time and end_time are both provided
+        start_time (datetime, optional): Start of custom time range (ISO format)
+        end_time (datetime, optional): End of custom time range (ISO format)
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        dict: Realtime metrics data containing:
+            - device_id (str): Device identifier
+            - metrics (list[PerformanceMetric]): List of metrics in time order
+            - averages (dict): Calculated average values:
+                - cpu_percent (float): Average CPU utilization
+                - gpu_percent (float): Average GPU utilization
+                - memory_percent (float): Average memory utilization
+
+    Raises:
+        HTTPException: None (returns empty metrics list if no data found)
+
+    Example:
+        ```bash
+        # Get last 5 minutes of metrics
+        curl "http://localhost:8000/api/performance/metrics/realtime/dev-001?seconds=300"
+
+        # Get metrics for specific time range
+        curl "http://localhost:8000/api/performance/metrics/realtime/dev-001?start_time=2024-01-15T10:00:00&end_time=2024-01-15T11:00:00"
+        ```
+    """
     import json
 
     # 如果提供了日期范围参数，优先使用日期范围
@@ -353,7 +532,46 @@ def get_realtime_metrics(
 def create_benchmark(
     benchmark: SoftwareBenchmarkCreate, db: Session = Depends(get_db_sync)
 ):
-    """创建基准测试记录"""
+    """
+    Create a new software benchmark record.
+    
+    Records benchmark test metadata before execution, including device info,
+    software details, and test configuration.
+    
+    Args:
+        benchmark (SoftwareBenchmarkCreate): Benchmark configuration containing:
+            - device_id (str): Target device identifier
+            - software_code (str): Software identifier code
+            - benchmark_type (str): Type of benchmark (e.g., "blender", "maya", "unreal")
+            - test_scene (str, optional): Test scene name or identifier
+            - scene_file_path (str, optional): Path to scene file used
+            - timestamp (datetime, optional): Benchmark timestamp (defaults to current UTC)
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        SoftwareBenchmarkResponse: The created benchmark record including:
+            - id (str): Unique benchmark identifier
+            - device_id (str): Device identifier
+            - software_code (str): Software code
+            - benchmark_type (str): Benchmark type
+            - status (str): Initial status ("pending")
+            - All other benchmark fields
+    
+    Raises:
+        HTTPException: None (validation errors handled by FastAPI automatically)
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/benchmarks" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "device_id": "dev-001",
+            "software_code": "blender-3.6",
+            "benchmark_type": "render",
+            "test_scene": "classroom"
+          }'
+        ```
+    """
     if not benchmark.timestamp:
         benchmark.timestamp = datetime.utcnow()
     db_benchmark = SoftwareBenchmark(**benchmark.model_dump())
@@ -374,7 +592,39 @@ def get_benchmarks(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db_sync),
 ):
-    """获取基准测试列表"""
+    """
+    Retrieve a paginated list of benchmark records with optional filtering.
+
+    Queries historical benchmark data with support for filtering by device,
+    software, benchmark type, and time range.
+
+    Args:
+        device_id (str, optional): Filter by device identifier
+        software_code (str, optional): Filter by software code
+        benchmark_type (str, optional): Filter by benchmark type (e.g., "render", "compile")
+        start_time (datetime, optional): Filter benchmarks after this time
+        end_time (datetime, optional): Filter benchmarks before this time
+        limit (int): Maximum number of results (default: 50, range: 1-500)
+        offset (int): Number of results to skip for pagination (default: 0)
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        SoftwareBenchmarkListResponse: Paginated benchmark results containing:
+            - total (int): Total number of benchmarks matching filters
+            - items (list[SoftwareBenchmark]): List of benchmark records
+
+    Raises:
+        HTTPException: None (returns empty list if no benchmarks found)
+
+    Example:
+        ```bash
+        # Get all benchmarks for a device
+        curl "http://localhost:8000/api/performance/benchmarks?device_id=dev-001"
+
+        # Get Blender renders from the last week
+        curl "http://localhost:8000/api/performance/benchmarks?benchmark_type=render&start_time=2024-01-08T00:00:00"
+        ```
+    """
     query = select(SoftwareBenchmark)
 
     if device_id:
@@ -403,7 +653,38 @@ def get_benchmarks(
 
 @router.get("/benchmarks/{benchmark_id}", response_model=SoftwareBenchmarkResponse)
 def get_benchmark(benchmark_id: str, db: Session = Depends(get_db_sync)):
-    """获取基准测试详情"""
+    """
+    Retrieve a specific benchmark record by its unique identifier.
+
+    Returns complete benchmark details including scores, performance metrics,
+    and any error information if the benchmark failed.
+
+    Args:
+        benchmark_id (str): Unique identifier of the benchmark to retrieve
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        SoftwareBenchmarkResponse: Complete benchmark record containing:
+            - id (str): Benchmark identifier
+            - device_id (str): Device identifier
+            - software_code (str): Software code
+            - benchmark_type (str): Benchmark type
+            - status (str): Benchmark status (pending/running/completed/failed)
+            - score (float, optional): Overall benchmark score
+            - score_cpu, score_gpu, score_memory, score_disk (float, optional): Component scores
+            - avg_fps, min_fps, max_fps (float, optional): Frame rate statistics
+            - peak_cpu_percent, peak_gpu_percent (float, optional): Peak utilization
+            - bottleneck_type (str, optional): Identified bottleneck
+            - upgrade_suggestion (str, optional): Upgrade recommendations
+
+    Raises:
+        HTTPException: 404 Not Found if no benchmark exists with the given ID
+
+    Example:
+        ```bash
+        curl "http://localhost:8000/api/performance/benchmarks/bmark-12345"
+        ```
+    """
     result = db.execute(
         select(SoftwareBenchmark).where(SoftwareBenchmark.id == benchmark_id)
     )
@@ -415,7 +696,39 @@ def get_benchmark(benchmark_id: str, db: Session = Depends(get_db_sync)):
 
 @router.post("/benchmarks/start", response_model=SoftwareBenchmarkResponse)
 def start_benchmark(request: BenchmarkStartRequest, db: Session = Depends(get_db_sync)):
-    """开始基准测试"""
+    """
+    Initiate a new benchmark test on a specified device.
+    
+    Creates a benchmark record with "running" status after verifying the device exists.
+    The actual benchmark execution is performed by the device agent.
+    
+    Args:
+        request (BenchmarkStartRequest): Benchmark start request containing:
+            - device_id (str): Target device identifier
+            - software_code (str): Software to benchmark
+            - benchmark_type (str): Type of benchmark test
+            - test_scene (str, optional): Test scene name
+            - scene_file_path (str, optional): Path to scene file
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        SoftwareBenchmarkResponse: The created benchmark record with status="running"
+    
+    Raises:
+        HTTPException: 404 Not Found if the specified device does not exist
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/benchmarks/start" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "device_id": "dev-001",
+            "software_code": "blender-3.6",
+            "benchmark_type": "render",
+            "test_scene": "classroom"
+          }'
+        ```
+    """
     # Verify device exists
     device_result = db.execute(select(Device).where(Device.id == request.device_id))
     device = device_result.scalar_one_or_none()
@@ -445,7 +758,58 @@ def submit_benchmark_result(
     result: BenchmarkResultRequest,
     db: Session = Depends(get_db_sync),
 ):
-    """提交基准测试结果"""
+    """
+    Submit the results of a completed benchmark test.
+    
+    Updates the benchmark record with scores, performance metrics, and final status.
+    Called by the device agent after benchmark execution completes.
+    
+    Args:
+        benchmark_id (str): Unique identifier of the benchmark to update
+        result (BenchmarkResultRequest): Benchmark results containing:
+            - status (str): Final status ("completed" or "failed")
+            - score (float, optional): Overall benchmark score
+            - score_cpu (float, optional): CPU benchmark score
+            - score_gpu (float, optional): GPU benchmark score
+            - score_memory (float, optional): Memory benchmark score
+            - score_disk (float, optional): Disk benchmark score
+            - avg_fps (float, optional): Average frames per second
+            - min_fps (float, optional): Minimum frames per second
+            - max_fps (float, optional): Maximum frames per second
+            - frame_count (int, optional): Total frames rendered
+            - render_time_seconds (float, optional): Total render time
+            - peak_cpu_percent (float, optional): Peak CPU utilization
+            - peak_gpu_percent (float, optional): Peak GPU utilization
+            - peak_memory_mb (float, optional): Peak memory usage
+            - peak_gpu_memory_mb (float, optional): Peak GPU memory usage
+            - avg_cpu_percent (float, optional): Average CPU utilization
+            - avg_gpu_percent (float, optional): Average GPU utilization
+            - avg_memory_mb (float, optional): Average memory usage
+            - error_message (str, optional): Error details if failed
+            - bottleneck_type (str, optional): Identified bottleneck (cpu/gpu/memory/disk)
+            - bottleneck_detail (str, optional): Detailed bottleneck analysis
+            - upgrade_suggestion (str, optional): Hardware upgrade recommendations
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        SoftwareBenchmarkResponse: The updated benchmark record
+    
+    Raises:
+        HTTPException: 404 Not Found if no benchmark exists with the given ID
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/benchmarks/bmark-12345/result" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "status": "completed",
+            "score": 12500,
+            "score_gpu": 15200,
+            "avg_fps": 45.2,
+            "peak_gpu_percent": 98.5
+          }'
+        ```
+    """
     result_db = db.execute(
         select(SoftwareBenchmark).where(SoftwareBenchmark.id == benchmark_id)
     )
@@ -492,7 +856,44 @@ def submit_benchmark_result(
     status_code=status.HTTP_201_CREATED,
 )
 def create_command(command: ControlCommandCreate, db: Session = Depends(get_db_sync)):
-    """创建控制命令"""
+    """
+    Create a new control command for a device.
+    
+    Queues a command for a device to execute, such as shutdown, restart, or
+    software installation. Commands are pulled by the device agent.
+    
+    Args:
+        command (ControlCommandCreate): Command configuration containing:
+            - device_id (str): Target device identifier
+            - command_type (str): Type of command (e.g., "shutdown", "restart", "install")
+            - priority (int, optional): Command priority (higher = more urgent, default: 0)
+            - parameters (dict, optional): Command-specific parameters
+            - scheduled_at (datetime, optional): Scheduled execution time
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        ControlCommandResponse: The created command including:
+            - id (str): Unique command identifier
+            - device_id (str): Target device
+            - command_type (str): Command type
+            - status (str): Initial status ("pending")
+            - priority (int): Command priority
+            - created_at (datetime): Creation timestamp
+    
+    Raises:
+        HTTPException: None (validation errors handled by FastAPI automatically)
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/commands" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "device_id": "dev-001",
+            "command_type": "shutdown",
+            "priority": 10
+          }'
+        ```
+    """
     db_command = ControlCommand(**command.model_dump())
     db.add(db_command)
     db.commit()
@@ -509,7 +910,36 @@ def get_commands(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db_sync),
 ):
-    """获取控制命令列表"""
+    """
+    Retrieve a paginated list of control commands with optional filtering.
+
+    Queries command history with support for filtering by device, status, and type.
+
+    Args:
+        device_id (str, optional): Filter by device identifier
+        status (str, optional): Filter by command status ("pending", "executing", "completed", "failed")
+        command_type (str, optional): Filter by command type (e.g., "shutdown", "restart")
+        limit (int): Maximum number of results (default: 50, range: 1-500)
+        offset (int): Number of results to skip for pagination (default: 0)
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        ControlCommandListResponse: Paginated command results containing:
+            - total (int): Total number of commands matching filters
+            - items (list[ControlCommand]): List of command records
+
+    Raises:
+        HTTPException: None (returns empty list if no commands found)
+
+    Example:
+        ```bash
+        # Get all pending commands for a device
+        curl "http://localhost:8000/api/performance/commands?device_id=dev-001&status=pending"
+
+        # Get all shutdown commands
+        curl "http://localhost:8000/api/performance/commands?command_type=shutdown"
+        ```
+    """
     query = select(ControlCommand)
 
     if device_id:
@@ -532,7 +962,29 @@ def get_commands(
 
 @router.get("/commands/pending", response_model=ControlCommandListResponse)
 def get_pending_commands(device_id: str, db: Session = Depends(get_db_sync)):
-    """获取设备的待执行命令"""
+    """
+    Retrieve all pending (unexecuted) commands for a specific device.
+
+    Returns commands ordered by priority (highest first) then by creation time (oldest first),
+    suitable for a device to poll and retrieve its next commands to execute.
+
+    Args:
+        device_id (str): Unique identifier of the device to fetch pending commands for
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        ControlCommandListResponse: List of pending commands containing:
+            - total (int): Number of pending commands
+            - items (list[ControlCommand]): List of pending command records ordered by priority desc, created_at asc
+
+    Raises:
+        HTTPException: None (returns empty list if no pending commands)
+
+    Example:
+        ```bash
+        curl "http://localhost:8000/api/performance/commands/pending?device_id=dev-001"
+        ```
+    """
     result = db.execute(
         select(ControlCommand)
         .where(ControlCommand.device_id == device_id)
@@ -545,7 +997,28 @@ def get_pending_commands(device_id: str, db: Session = Depends(get_db_sync)):
 
 @router.post("/commands/{command_id}/acknowledge")
 def acknowledge_command(command_id: str, db: Session = Depends(get_db_sync)):
-    """命令被设备确认接收"""
+    """
+    Acknowledge receipt of a command by the target device.
+
+    Called by the device agent when it receives and starts processing a command.
+    Changes the command status from "pending" to "executing".
+
+    Args:
+        command_id (str): Unique identifier of the command to acknowledge
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        dict: Acknowledgment confirmation containing:
+            - status (str): Confirmation status ("acknowledged")
+
+    Raises:
+        HTTPException: 404 Not Found if no command exists with the given ID
+
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/commands/cmd-12345/acknowledge"
+        ```
+    """
     result = db.execute(select(ControlCommand).where(ControlCommand.id == command_id))
     command = result.scalar_one_or_none()
     if not command:
@@ -565,7 +1038,34 @@ def complete_command(
     error_message: Optional[str] = None,
     db: Session = Depends(get_db_sync),
 ):
-    """命令执行完成"""
+    """
+    Mark a command as completed (success or failure) by the device.
+
+    Called by the device agent when command execution finishes. If error_message
+    is provided, the command status is set to "failed"; otherwise it is "completed".
+
+    Args:
+        command_id (str): Unique identifier of the command to complete
+        result (str, optional): Execution result or output from the command
+        error_message (str, optional): Error details if command failed
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        dict: Completion confirmation containing:
+            - status (str): Final status ("completed" or "failed")
+
+    Raises:
+        HTTPException: 404 Not Found if no command exists with the given ID
+
+    Example:
+        ```bash
+        # Successful completion
+        curl -X POST "http://localhost:8000/api/performance/commands/cmd-12345/complete?result=Shutdown initiated successfully"
+
+        # Failed completion
+        curl -X POST "http://localhost:8000/api/performance/commands/cmd-12345/complete?error_message=Insufficient permissions"
+        ```
+    """
     result_db = db.execute(
         select(ControlCommand).where(ControlCommand.id == command_id)
     )
@@ -591,7 +1091,51 @@ def complete_command(
     status_code=status.HTTP_201_CREATED,
 )
 def create_alert(alert: PerformanceAlertCreate, db: Session = Depends(get_db_sync)):
-    """创建性能告警"""
+    """
+    Create a new performance alert for a device.
+    
+    Records an alert when a performance threshold is exceeded, such as high CPU
+    temperature, low disk space, or high memory usage.
+    
+    Args:
+        alert (PerformanceAlertCreate): Alert configuration containing:
+            - device_id (str): Target device identifier
+            - alert_type (str): Type of alert (e.g., "high_cpu_temp", "low_disk_space", "high_memory")
+            - severity (str): Alert severity ("info", "warning", "critical")
+            - message (str): Human-readable alert message
+            - metric_value (float, optional): The metric value that triggered the alert
+            - threshold (float, optional): The threshold that was exceeded
+            - metric_name (str, optional): Name of the metric that triggered the alert
+        db (Session): SQLAlchemy database session (injected via dependency)
+    
+    Returns:
+        PerformanceAlertResponse: The created alert including:
+            - id (str): Unique alert identifier
+            - device_id (str): Device identifier
+            - alert_type (str): Alert type
+            - severity (str): Alert severity
+            - message (str): Alert message
+            - is_resolved (bool): Resolution status (false)
+            - created_at (datetime): Alert creation timestamp
+    
+    Raises:
+        HTTPException: None (validation errors handled by FastAPI automatically)
+    
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/alerts" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "device_id": "dev-001",
+            "alert_type": "high_cpu_temp",
+            "severity": "warning",
+            "message": "CPU temperature exceeded 85°C",
+            "metric_value": 87.5,
+            "threshold": 85.0,
+            "metric_name": "cpu_temperature"
+          }'
+        ```
+    """
     db_alert = PerformanceAlert(**alert.model_dump())
     db.add(db_alert)
     db.commit()
@@ -608,7 +1152,36 @@ def get_alerts(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db_sync),
 ):
-    """获取性能告警列表"""
+    """
+    Retrieve a paginated list of performance alerts with optional filtering.
+
+    Queries alert history with support for filtering by device, resolution status, and severity.
+
+    Args:
+        device_id (str, optional): Filter by device identifier
+        is_resolved (bool, optional): Filter by resolution status (true = resolved, false = unresolved)
+        severity (str, optional): Filter by severity level ("info", "warning", "critical")
+        limit (int): Maximum number of results (default: 50, range: 1-500)
+        offset (int): Number of results to skip for pagination (default: 0)
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        PerformanceAlertListResponse: Paginated alert results containing:
+            - total (int): Total number of alerts matching filters
+            - items (list[PerformanceAlert]): List of alert records
+
+    Raises:
+        HTTPException: None (returns empty list if no alerts found)
+
+    Example:
+        ```bash
+        # Get all unresolved alerts for a device
+        curl "http://localhost:8000/api/performance/alerts?device_id=dev-001&is_resolved=false"
+
+        # Get all critical alerts
+        curl "http://localhost:8000/api/performance/alerts?severity=critical"
+        ```
+    """
     query = select(PerformanceAlert)
 
     if device_id:
@@ -635,7 +1208,28 @@ def get_alerts(
 def resolve_alert(
     alert_id: str, resolved_by: str = Query(...), db: Session = Depends(get_db_sync)
 ):
-    """解决告警"""
+    """
+    Mark a performance alert as resolved.
+
+    Records the resolution of an alert including who resolved it and when.
+
+    Args:
+        alert_id (str): Unique identifier of the alert to resolve
+        resolved_by (str): Identifier of the user or system that resolved the alert
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        dict: Resolution confirmation containing:
+            - status (str): Resolution status ("resolved")
+
+    Raises:
+        HTTPException: 404 Not Found if no alert exists with the given ID
+
+    Example:
+        ```bash
+        curl -X POST "http://localhost:8000/api/performance/alerts/alert-12345/resolve?resolved_by=admin"
+        ```
+    """
     result = db.execute(select(PerformanceAlert).where(PerformanceAlert.id == alert_id))
     alert = result.scalar_one_or_none()
     if not alert:
@@ -654,7 +1248,32 @@ def resolve_alert(
 
 @router.get("/devices/{device_id}/status")
 def get_device_status(device_id: str, db: Session = Depends(get_db_sync)):
-    """获取设备实时状态"""
+    """
+    Retrieve the current real-time status summary of a device.
+
+    Provides an overview including the latest metric, pending alerts count,
+    recent benchmarks, and online/offline status based on metric availability.
+
+    Args:
+        device_id (str): Unique identifier of the device to get status for
+        db (Session): SQLAlchemy database session (injected via dependency)
+
+    Returns:
+        dict: Device status summary containing:
+            - device_id (str): Device identifier
+            - latest_metric (PerformanceMetric or None): Most recent performance metric
+            - pending_alerts_count (int): Number of unresolved alerts
+            - recent_benchmarks (list[SoftwareBenchmark]): Last 5 benchmark records
+            - status (str): Device status ("online" if latest_metric exists, "offline" otherwise)
+
+    Raises:
+        HTTPException: None (returns offline status with null metric if no data)
+
+    Example:
+        ```bash
+        curl "http://localhost:8000/api/performance/devices/dev-001/status"
+        ```
+    """
     # Get latest metric
     metric_result = db.execute(
         select(PerformanceMetric)

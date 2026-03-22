@@ -781,7 +781,7 @@ const refreshCpuChart = async () => {
       // 转换为北京时间
       const timestamps = data.metrics.map((m: any) => {
         const date = new Date(m.timestamp)
-        date.setHours(date.getHours() + 8) // UTC+8 北京时间
+        date.setUTCHours(date.getUTCHours() + 8)
         return date.toLocaleTimeString()
       })
       
@@ -850,7 +850,10 @@ const refreshCpuChart = async () => {
       }
 
       const option: any = {
-        tooltip: { trigger: 'axis' }, // 确保 tooltip 被设置
+        tooltip: { 
+          trigger: 'axis',
+          axisPointer: { type: 'cross' }
+        },
         xAxis: { data: timestamps },
         yAxis: { 
             min: chartMin,
@@ -858,7 +861,6 @@ const refreshCpuChart = async () => {
             axisLabel: { formatter: yAxisFormatter },
             name: yAxisName
         },
-        // 使用前面定义的grid配置
         grid: gridConfig,
         series: [{ 
             name: seriesName,
@@ -871,25 +873,6 @@ const refreshCpuChart = async () => {
         }]
       }
       
-      // 显式确保 series 数据结构完整，避免被 replaceMerge 清空关键属性
-      option.series = [{
-          name: seriesName,
-          type: 'line',
-          smooth: true,
-          data: seriesData,
-          // 确保样式被应用
-          areaStyle: option.series[0].areaStyle,
-          lineStyle: option.series[0].lineStyle,
-          itemStyle: option.series[0].itemStyle
-      }]
-      
-      // 关键修正：确保 tooltip 存在，否则鼠标交互失效
-      if (!option.tooltip) {
-          option.tooltip = { trigger: 'axis' }
-      }
-
-      // 始终使用全量重绘确保 tooltip 正常工作
-      // 使用 setOption(option, true) 强制不合并，彻底重绘
       cpuChart.setOption(option, true)
     }
   } catch (e: any) {
@@ -918,7 +901,7 @@ const refreshGpuChart = async () => {
       // 转换为北京时间
       const timestamps = data.metrics.map((m: any) => {
         const date = new Date(m.timestamp)
-        date.setHours(date.getHours() + 8)
+        date.setUTCHours(date.getUTCHours() + 8)
         return date.toLocaleTimeString()
       })
       
@@ -928,7 +911,6 @@ const refreshGpuChart = async () => {
       let maxVal = 100
 
       if (gpuMetricType.value === 'memory') {
-        // VRAM usage in MB
         seriesData = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0))
         yAxisFormatter = '{value} MB'
         seriesName = '显存'
@@ -951,8 +933,14 @@ const refreshGpuChart = async () => {
 
       gpuVramHistory.value = data.metrics.map((m: any) => (m.gpu_memory_used_mb || 0) / 1024)
       
+      const gpuAreaColor = 'rgba(139, 92, 246, 0.2)'
+      const gpuLineColor = '#8b5cf6'
+      
       const option: any = {
-        tooltip: { trigger: 'axis' }, // 确保 tooltip 被设置
+        tooltip: { 
+          trigger: 'axis',
+          axisPointer: { type: 'cross' }
+        },
         xAxis: { data: timestamps },
         yAxis: { max: maxVal, axisLabel: { formatter: yAxisFormatter } },
         series: [{ 
@@ -960,13 +948,13 @@ const refreshGpuChart = async () => {
             data: seriesData,
             type: 'line',
             smooth: true,
-            areaStyle: { color: 'rgba(139, 92, 246, 0.2)' }
+            areaStyle: { color: gpuAreaColor },
+            lineStyle: { color: gpuLineColor },
+            itemStyle: { color: gpuLineColor }
         }]
       }
 
-      // 显存模式下，不需要设置 max 为 100，如果是 usage 则需要
       if (gpuMetricType.value === 'memory') {
-         // 使用 GB 单位
          seriesData = data.metrics.map((m: any) => {
              const mb = m.gpu_memory_used_mb || 0
              return Number((mb / 1024).toFixed(2))
@@ -974,48 +962,35 @@ const refreshGpuChart = async () => {
          
          delete option.yAxis.max
          option.yAxis.axisLabel.formatter = '{value} GB'
-         // 显存模式不需要强制 splitNumber，让它自动生成合理的刻度，或者设置为 undefined
          delete option.yAxis.splitNumber 
          option.grid = { left: 45, right: 20, top: 20, bottom: 30 }
          
-         // 颜色
-         option.series[0].areaStyle = { color: 'rgba(139, 92, 246, 0.2)' }
-         option.series[0].lineStyle = { color: '#8b5cf6' }
-         option.series[0].itemStyle = { color: '#8b5cf6' }
+         option.series[0].areaStyle = { color: gpuAreaColor }
+         option.series[0].lineStyle = { color: gpuLineColor }
+         option.series[0].itemStyle = { color: gpuLineColor }
          
-         // 移除强制的最大值设置，让图表根据实际数据自动缩放，避免出现奇怪的刻度（如96GB/94GB）
          if (option.yAxis.max) delete option.yAxis.max
       } else {
         option.yAxis.max = 100
         option.yAxis.axisLabel.formatter = '{value}%'
-        // 恢复默认行距设置（不强制 splitNumber，或者设置为 null/undefined 让 echarts 自动处理，通常是5段6行）
         delete option.yAxis.splitNumber 
         option.grid = { left: 40, right: 20, top: 20, bottom: 30 }
         
-        // 恢复原来的紫色样式
-        option.series[0].areaStyle = { color: 'rgba(139, 92, 246, 0.2)' }
-        option.series[0].lineStyle = { color: '#8b5cf6' }
-        option.series[0].itemStyle = { color: '#8b5cf6' }
+        option.series[0].areaStyle = { color: gpuAreaColor }
+        option.series[0].lineStyle = { color: gpuLineColor }
+        option.series[0].itemStyle = { color: gpuLineColor }
       }
       
-      // 显式确保 series 数据结构完整，避免被 replaceMerge 清空关键属性
       option.series = [{
           name: seriesName,
           type: 'line',
           smooth: true,
           data: seriesData,
-          // 确保样式被应用
-          areaStyle: option.series[0].areaStyle,
-          lineStyle: option.series[0].lineStyle,
-          itemStyle: option.series[0].itemStyle
+          areaStyle: { color: gpuAreaColor },
+          lineStyle: { color: gpuLineColor },
+          itemStyle: { color: gpuLineColor }
       }]
-      
-      // 关键修正：确保 tooltip 存在，否则鼠标交互失效
-      if (!option.tooltip) {
-          option.tooltip = { trigger: 'axis' }
-      }
 
-      // 始终使用全量重绘确保 tooltip 正常工作
       gpuChart.setOption(option, true)
     }
   } catch (e: any) {
@@ -1044,7 +1019,7 @@ const refreshMemoryChart = async () => {
       // 转换为北京时间
       const timestamps = data.metrics.map((m: any) => {
         const date = new Date(m.timestamp)
-        date.setHours(date.getHours() + 8)
+        date.setUTCHours(date.getUTCHours() + 8)
         return date.toLocaleTimeString()
       })
       const memoryData = data.metrics.map((m: any) => {
@@ -1083,7 +1058,11 @@ const refreshDiskChart = async () => {
   try {
     const { data } = await api.get(url)
     if (data.metrics && data.metrics.length > 0) {
-      const timestamps = data.metrics.map((m: any) => new Date(m.timestamp).toLocaleTimeString())
+      const timestamps = data.metrics.map((m: any) => {
+        const date = new Date(m.timestamp)
+        date.setUTCHours(date.getUTCHours() + 8)
+        return date.toLocaleTimeString()
+      })
       
       // 更新磁盘选项
       const allDisks = new Set<string>()
