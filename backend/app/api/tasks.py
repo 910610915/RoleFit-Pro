@@ -118,7 +118,7 @@ async def list_tasks(
 @router.get("/pending")
 def get_pending_tasks_sync(
     device_id: str = Query(..., description="设备ID"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_sync),
 ):
     """Get pending tasks for a device (polled by agent)"""
     from sqlalchemy import select

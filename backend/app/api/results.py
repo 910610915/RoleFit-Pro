@@ -411,11 +411,11 @@ async def get_device_performance(device_id: str, db: AsyncSession = Depends(get_
     )
 
 
-# ==================== 性能指标历史数据 ====================
+# ==================== 脚本执行指标历史数据 ====================
 
 
-@router.get("/{result_id}/metrics", response_model=List[dict])
-async def get_result_metrics(result_id: str, db: AsyncSession = Depends(get_db)):
+@router.get("/{result_id}/execution-metrics", response_model=List[dict])
+async def get_execution_metrics(result_id: str, db: AsyncSession = Depends(get_db)):
     """获取测试结果的性能指标历史数据"""
     # 查找对应的执行记录
     exec_result = await db.execute(
