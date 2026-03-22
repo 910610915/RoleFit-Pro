@@ -302,7 +302,8 @@
 import { ref, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NModal, NForm, NFormItem, NInput, NIcon, useMessage } from 'naive-ui'
-import { login, register } from '@/api/auth'
+import { register } from '@/api/auth'
+import { useUserStore } from '@/stores/user'
 import ParticleBackgroundWhite from '@/components/ParticleBackgroundWhite.vue'
 import {
   CodeSlash,
@@ -319,6 +320,7 @@ import {
 
 const router = useRouter()
 const message = useMessage()
+const userStore = useUserStore()
 
 // Icon render function
 const renderIcon = (icon: any) => () => h(NIcon, null, { default: () => h(icon) })
@@ -411,15 +413,15 @@ const handleLogin = async () => {
     
     loading.value = true
     
-    const res = await login(formData.value)
-    const data = res.data
+    const result = await userStore.login(formData.value.username, formData.value.password)
     
-    localStorage.setItem('token', data.access_token)
-    localStorage.setItem('user', JSON.stringify(data.user))
-    
-    message.success('登录成功')
-    showLogin.value = false
-    router.push('/')
+    if (result.success) {
+      message.success('登录成功')
+      showLogin.value = false
+      router.push('/')
+    } else {
+      message.error(result.error || '登录失败，请检查用户名和密码')
+    }
   } catch (e: any) {
     console.error('Login error:', e)
     const errorMsg = e.response?.data?.detail || e.message || '登录失败，请检查用户名和密码'

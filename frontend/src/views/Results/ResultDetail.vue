@@ -61,7 +61,7 @@
       <!-- 性能趋势图表区域 -->
       <n-card title="性能监控趋势" class="mb-5">
         <!-- 无数据提示 -->
-        <n Alert v-if="!hasMetricsData" type="warning" show-icon>
+        <n-alert v-if="!hasMetricsData" type="warning" show-icon>
           暂无性能监控数据。该测试任务未收集详细的运行时指标数据。
         </n-alert>
         <n-tabs v-else type="line" animated>

@@ -313,7 +313,7 @@ async def init_scheduler():
 
     scheduler._scheduler.add_job(
         retention_service.run_cleanup,
-        trigger=CronTrigger(hour=3, minute=0),
+        trigger=CronTrigger(hour=3, minute=0, timezone="Asia/Shanghai"),
         id="daily_data_cleanup",
         name="每日数据清理",
         replace_existing=True,

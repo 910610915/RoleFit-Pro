@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -29,13 +30,13 @@ const routes: RouteRecordRaw[] = [
     path: '/tasks',
     name: 'TaskList',
     component: () => import('@/views/Tasks/TaskList.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, permission: 'tasks:read' }
   },
   {
     path: '/tasks/create',
     name: 'TaskCreate',
     component: () => import('@/views/Tasks/TaskCreate.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, permission: 'tasks:write' }
   },
   {
     path: '/results',
@@ -113,7 +114,7 @@ const routes: RouteRecordRaw[] = [
     path: '/system',
     name: 'system',
     component: () => import('@/views/SystemManagement.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, roles: ['super_admin', 'it_admin'] }
   }
 ]
 
@@ -122,17 +123,54 @@ const router = createRouter({
   routes
 })
 
-// Auth guard
-router.beforeEach((to, from, next) => {
+// Auth and permission guard
+router.beforeEach(async (to, from, next) => {
+  const userStore = useUserStore()
   const token = localStorage.getItem('token')
   
+  // 初始化用户信息
+  if (token && !userStore.user) {
+    userStore.restoreUser()
+    // 尝试获取完整用户信息和权限
+    try {
+      await userStore.fetchPermissions()
+    } catch (e) {
+      console.warn('Failed to fetch user permissions:', e)
+    }
+  }
+  
+  // 检查是否需要认证
   if (to.meta.requiresAuth && !token) {
     next({ name: 'Login' })
-  } else if (to.name === 'Login' && token) {
-    next({ name: 'Dashboard' })
-  } else {
-    next()
+    return
   }
+  
+  // 如果已登录访问登录页，跳转到首页
+  if (to.name === 'Login' && token) {
+    next({ name: 'Dashboard' })
+    return
+  }
+  
+  // 检查角色要求
+  const requiredRoles = to.meta.roles as string[] | undefined
+  if (requiredRoles && requiredRoles.length > 0) {
+    if (!userStore.hasRole(requiredRoles)) {
+      // 没有权限，显示提示并跳转到首页
+      console.warn(`Access denied to ${to.path}. Required roles: ${requiredRoles.join(', ')}`)
+      next({ name: 'Dashboard' })
+      return
+    }
+  }
+  
+  // 检查权限要求
+  const requiredPermission = to.meta.permission as string | undefined
+  if (requiredPermission && !userStore.hasPermission(requiredPermission)) {
+    console.warn(`Access denied to ${to.path}. Required permission: ${requiredPermission}`)
+    next({ name: 'Dashboard' })
+    return
+  }
+  
+  next()
 })
 
 export default router
