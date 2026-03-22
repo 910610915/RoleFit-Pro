@@ -6,6 +6,67 @@
 
 const si = require('systeminformation');
 const os = require('os');
+const { exec } = require('child_process');
+
+/**
+ * Get CPU temperature via WMI (Windows only)
+ * Requires OpenHardwareMonitor or similar tool running
+ */
+function getCPUTemperatureWMI() {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') {
+      resolve(null);
+      return;
+    }
+    
+    // Try using PowerShell to query WMI for temperature
+    // This works with OpenHardwareMonitor or other hardware monitoring tools
+    const psCmd = `powershell -Command "Get-WmiObject MSAcpi_ThermalZoneTemperature -Namespace 'root/wmi' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty CurrentTemperature"`;
+    
+    exec(psCmd, { timeout: 5000 }, (error, stdout, stderr) => {
+      if (error || !stdout.trim()) {
+        // Try alternative: query via wmic
+        exec('wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature /value', 
+          { timeout: 5000 }, 
+          (err2, stdout2, stderr2) => {
+            if (err2 || !stdout2.trim()) {
+              resolve(null);
+              return;
+            }
+            try {
+              // Parse temperature from output like "CurrentTemperature=300"
+              const match = stdout2.match(/CurrentTemperature=(\d+)/i);
+              if (match && match[1]) {
+                // WMI returns temperature in tenths of Kelvin
+                const tempK = parseInt(match[1]) / 10;
+                const tempC = tempK - 273.15;
+                resolve(Math.round(tempC * 10) / 10);
+              } else {
+                resolve(null);
+              }
+            } catch (e) {
+              resolve(null);
+            }
+          }
+        );
+        return;
+      }
+      
+      try {
+        // PowerShell returns temperature in Kelvin
+        const tempK = parseFloat(stdout.trim());
+        if (tempK > 0) {
+          const tempC = tempK - 273.15;
+          resolve(Math.round(tempC * 10) / 10);
+        } else {
+          resolve(null);
+        }
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  });
+}
 
 /**
  * Get all hardware information
@@ -299,11 +360,19 @@ async function getRealtimeMetrics() {
     // Get realtime metrics (CPU, memory, etc.)
     const cpuLoad = await si.currentLoad();
     const cpuCurrentSpeed = await si.cpuCurrentSpeed();
-    const cpuTemp = await si.cpuTemperature();
+    let cpuTemp = await si.cpuTemperature();
     const memory = await si.mem();
     const graphics = await si.graphics();
     const diskIO = await si.disksIO();
     const networkStats = await si.networkStats();
+    
+    // If cpuTemp is null/undefined (common on Windows), try WMI fallback
+    if (!cpuTemp || cpuTemp.main === null || cpuTemp.main === undefined) {
+      const wmiTemp = await getCPUTemperatureWMI();
+      if (wmiTemp !== null) {
+        cpuTemp = { main: wmiTemp };
+      }
+    }
     
     // Get detailed disk counters (Windows only)
     let diskDetails = [];
