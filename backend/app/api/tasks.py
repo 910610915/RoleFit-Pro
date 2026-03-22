@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import uuid
 import json
 
-from app.core.database import get_db
+from app.core.database import get_db, get_db_sync
 from app.models.sqlite import TestTask, TestScript, Device
 from app.schemas.task import (
     TestTaskCreate,

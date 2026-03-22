@@ -76,8 +76,19 @@ class HardwareBenchmarkAgent:
             logger.warning("Performance Monitor not available")
             self.PerformanceMonitor = None
 
+        # Import Task Executor
+        try:
+            from task_executor import TaskExecutor
+
+            self.TaskExecutor = TaskExecutor
+        except ImportError:
+            logger.warning("Task Executor not available")
+            self.TaskExecutor = None
+
         self.monitor = None
         self.monitor_thread = None
+        self.task_executor = None
+        self.task_executor_thread = None
 
     def load_device_id(self) -> Optional[str]:
         """Load device ID from file"""
@@ -465,6 +476,17 @@ class HardwareBenchmarkAgent:
             except Exception as e:
                 logger.error(f"Failed to start performance monitor: {e}")
 
+        # Start task executor
+        if self.TaskExecutor and self.device_id:
+            logger.info("Starting task executor...")
+            try:
+                self.task_executor = self.TaskExecutor(
+                    self.device_id, self.server_url, self.api_key
+                )
+                self.task_executor.start()
+            except Exception as e:
+                logger.error(f"Failed to start task executor: {e}")
+
         # Main loop
         while self.running:
             try:
@@ -473,15 +495,10 @@ class HardwareBenchmarkAgent:
                     status="online", current_task_id=self.current_task_id
                 )
 
-                # Poll for tasks (only if not busy)
-                if not self.current_task_id:
-                    task = self.poll_tasks()
-                    if task:
-                        logger.info(f"Received task: {task.get('id')}")
-                        # Process task (simplified - actual implementation would handle different task types)
-
-                # Poll for control commands (only if not busy)
-                if not self.current_task_id:
+                # Poll for control commands (only if not busy with a task)
+                if not self.current_task_id and not (
+                    self.task_executor and self.task_executor.current_task_id
+                ):
                     control_cmd = self.poll_control_commands()
                     if control_cmd:
                         logger.info(
@@ -501,6 +518,11 @@ class HardwareBenchmarkAgent:
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
                 time.sleep(10)
+
+        # Stop task executor
+        if self.task_executor:
+            logger.info("Stopping task executor...")
+            self.task_executor.stop()
 
         # Stop performance monitor
         if self.monitor:
