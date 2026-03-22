@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import uuid
 import json
 
-from app.core.database import get_db_sync
+from app.core.database import get_db
 from app.models.sqlite import TestTask, TestScript, Device
 from app.schemas.task import (
     TestTaskCreate,
@@ -43,9 +43,7 @@ def task_to_response(task: TestTask) -> dict:
 
 
 @router.post("", response_model=TestTaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(
-    task_data: TestTaskCreate, db: AsyncSession = Depends(get_db_sync)
-):
+async def create_task(task_data: TestTaskCreate, db: AsyncSession = Depends(get_db)):
     """Create a new test task"""
     # Validate script if provided
     if task_data.test_script_id:
@@ -86,7 +84,7 @@ async def list_tasks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     task_status: Optional[str] = None,
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get test task list"""
     query = select(TestTask)
@@ -120,7 +118,7 @@ async def list_tasks(
 @router.get("/pending")
 def get_pending_tasks_sync(
     device_id: str = Query(..., description="设备ID"),
-    db: Session = Depends(get_db_sync),
+    db: Session = Depends(get_db),
 ):
     """Get pending tasks for a device (polled by agent)"""
     from sqlalchemy import select
@@ -146,7 +144,7 @@ def get_pending_tasks_sync(
 
 
 @router.get("/{task_id}", response_model=TestTaskResponse)
-def get_task(task_id: str, db: Session = Depends(get_db_sync)):
+def get_task(task_id: str, db: Session = Depends(get_db)):
     """Get task details"""
     result = db.execute(select(TestTask).where(TestTask.id == task_id))
     task = result.scalar_one_or_none()
@@ -161,7 +159,7 @@ def get_task(task_id: str, db: Session = Depends(get_db_sync)):
 
 @router.put("/{task_id}", response_model=TestTaskResponse)
 async def update_task(
-    task_id: str, task_data: TestTaskUpdate, db: AsyncSession = Depends(get_db_sync)
+    task_id: str, task_data: TestTaskUpdate, db: AsyncSession = Depends(get_db)
 ):
     """Update task"""
     result = await db.execute(select(TestTask).where(TestTask.id == task_id))
@@ -183,7 +181,7 @@ async def update_task(
 
 @router.post("/{task_id}/execute", response_model=TestTaskResponse)
 async def execute_task(
-    task_id: str, request: TaskExecuteRequest, db: AsyncSession = Depends(get_db_sync)
+    task_id: str, request: TaskExecuteRequest, db: AsyncSession = Depends(get_db)
 ):
     """Execute a task"""
     result = await db.execute(select(TestTask).where(TestTask.id == task_id))
@@ -214,7 +212,7 @@ async def execute_task(
 
 @router.post("/{task_id}/cancel", response_model=TestTaskResponse)
 async def cancel_task(
-    task_id: str, request: TaskCancelRequest, db: AsyncSession = Depends(get_db_sync)
+    task_id: str, request: TaskCancelRequest, db: AsyncSession = Depends(get_db)
 ):
     """Cancel a running task"""
     result = await db.execute(select(TestTask).where(TestTask.id == task_id))
@@ -244,7 +242,7 @@ async def cancel_task(
 async def complete_task(
     task_id: str,
     task_status: str = Query("completed"),
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """Mark task as completed"""
     result = await db.execute(select(TestTask).where(TestTask.id == task_id))
@@ -282,7 +280,7 @@ class SoftwareErrorRequest(BaseModel):
 
 @router.post("/{task_id}/software_error")
 async def report_software_error(
-    task_id: str, request: SoftwareErrorRequest, db: AsyncSession = Depends(get_db_sync)
+    task_id: str, request: SoftwareErrorRequest, db: AsyncSession = Depends(get_db)
 ):
     """Agent上报软件安装/执行错误"""
     result = await db.execute(select(TestTask).where(TestTask.id == task_id))
@@ -307,7 +305,7 @@ async def report_software_error(
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(task_id: str, db: AsyncSession = Depends(get_db_sync)):
+async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
     """Delete task"""
     result = await db.execute(select(TestTask).where(TestTask.id == task_id))
     task = result.scalar_one_or_none()

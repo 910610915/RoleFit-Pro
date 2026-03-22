@@ -4,7 +4,7 @@ from sqlalchemy import select, func, and_, desc
 from typing import Optional, List
 from datetime import datetime, timedelta
 
-from app.core.database import get_db_sync
+from app.core.database import get_db
 from app.models.sqlite import (
     TestResult,
     Device,
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/results", tags=["Results"])
 
 @router.post("", response_model=TestResultResponse, status_code=status.HTTP_201_CREATED)
 async def create_result(
-    result_data: TestResultCreate, db: AsyncSession = Depends(get_db_sync)
+    result_data: TestResultCreate, db: AsyncSession = Depends(get_db)
 ):
     """Create a new test result"""
     # Verify device exists
@@ -65,7 +65,7 @@ async def list_results(
     is_standard_met: Optional[bool] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get test result list"""
     query = select(TestResult)
@@ -111,7 +111,7 @@ async def list_results(
 @router.get("/compare", response_model=List[dict])
 async def compare_devices(
     device_ids: str = Query(..., description="设备ID列表，用逗号分隔"),
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """对比多台设备的性能"""
     device_id_list = [d.strip() for d in device_ids.split(",") if d.strip()]
@@ -207,7 +207,7 @@ async def compare_devices(
 
 
 @router.get("/{result_id}", response_model=TestResultResponse)
-async def get_result(result_id: str, db: AsyncSession = Depends(get_db_sync)):
+async def get_result(result_id: str, db: AsyncSession = Depends(get_db)):
     """Get result details"""
     result = await db.execute(select(TestResult).where(TestResult.id == result_id))
     test_result = result.scalar_one_or_none()
@@ -223,7 +223,7 @@ async def get_result(result_id: str, db: AsyncSession = Depends(get_db_sync)):
 @router.get("/{result_id}/metrics")
 async def get_result_metrics(
     result_id: str,
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get performance metrics for a specific result"""
     # Get the result first to find the device_id
@@ -273,7 +273,7 @@ async def get_result_metrics(
 async def update_result(
     result_id: str,
     result_data: TestResultUpdate,
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update result"""
     result = await db.execute(select(TestResult).where(TestResult.id == result_id))
@@ -295,7 +295,7 @@ async def update_result(
 
 @router.get("/statistics/overview", response_model=ResultStatistics)
 async def get_overall_statistics(
-    days: int = Query(30, ge=1, le=365), db: AsyncSession = Depends(get_db_sync)
+    days: int = Query(30, ge=1, le=365), db: AsyncSession = Depends(get_db)
 ):
     """Get overall test statistics"""
     start_date = datetime.utcnow() - timedelta(days=days)
@@ -352,9 +352,7 @@ async def get_overall_statistics(
 
 
 @router.get("/statistics/device/{device_id}", response_model=DevicePerformanceSummary)
-async def get_device_performance(
-    device_id: str, db: AsyncSession = Depends(get_db_sync)
-):
+async def get_device_performance(device_id: str, db: AsyncSession = Depends(get_db)):
     """Get device performance summary"""
     # Get device
     result = await db.execute(select(Device).where(Device.id == device_id))
@@ -417,7 +415,7 @@ async def get_device_performance(
 
 
 @router.get("/{result_id}/metrics", response_model=List[dict])
-async def get_result_metrics(result_id: str, db: AsyncSession = Depends(get_db_sync)):
+async def get_result_metrics(result_id: str, db: AsyncSession = Depends(get_db)):
     """获取测试结果的性能指标历史数据"""
     # 查找对应的执行记录
     exec_result = await db.execute(

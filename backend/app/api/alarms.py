@@ -9,7 +9,7 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 import json
 
-from app.core.database import get_db_sync
+from app.core.database import get_db
 from app.models.sqlite import AlarmRule, Alarm, Device, TestResult
 from pydantic import BaseModel
 
@@ -63,7 +63,7 @@ class AlarmResponse(BaseModel):
 
 @router.get("/rules", response_model=List[AlarmRuleResponse])
 async def list_alarm_rules(
-    enabled: Optional[bool] = None, db: AsyncSession = Depends(get_db_sync)
+    enabled: Optional[bool] = None, db: AsyncSession = Depends(get_db)
 ):
     """获取告警规则列表"""
     query = select(AlarmRule).order_by(AlarmRule.created_at.desc())
@@ -95,7 +95,7 @@ async def list_alarm_rules(
     "/rules", response_model=AlarmRuleResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_alarm_rule(
-    rule_data: AlarmRuleCreate, db: AsyncSession = Depends(get_db_sync)
+    rule_data: AlarmRuleCreate, db: AsyncSession = Depends(get_db)
 ):
     """创建告警规则"""
     db_rule = AlarmRule(
@@ -126,7 +126,7 @@ async def create_alarm_rule(
 
 @router.put("/rules/{rule_id}", response_model=AlarmRuleResponse)
 async def update_alarm_rule(
-    rule_id: str, rule_data: AlarmRuleCreate, db: AsyncSession = Depends(get_db_sync)
+    rule_id: str, rule_data: AlarmRuleCreate, db: AsyncSession = Depends(get_db)
 ):
     """更新告警规则"""
     result = await db.execute(select(AlarmRule).where(AlarmRule.id == rule_id))
@@ -161,7 +161,7 @@ async def update_alarm_rule(
 
 
 @router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_alarm_rule(rule_id: str, db: AsyncSession = Depends(get_db_sync)):
+async def delete_alarm_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     """删除告警规则"""
     result = await db.execute(select(AlarmRule).where(AlarmRule.id == rule_id))
     rule = result.scalar_one_or_none()
@@ -184,7 +184,7 @@ async def list_alarms(
     page_size: int = Query(20, ge=1, le=100),
     is_resolved: Optional[bool] = None,
     severity: Optional[str] = None,
-    db: AsyncSession = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_db),
 ):
     """获取告警列表"""
     query = select(Alarm).order_by(Alarm.created_at.desc())
@@ -219,7 +219,7 @@ async def list_alarms(
 
 
 @router.post("/{alarm_id}/resolve", response_model=AlarmResponse)
-async def resolve_alarm(alarm_id: str, db: AsyncSession = Depends(get_db_sync)):
+async def resolve_alarm(alarm_id: str, db: AsyncSession = Depends(get_db)):
     """解决告警"""
     result = await db.execute(select(Alarm).where(Alarm.id == alarm_id))
     alarm = result.scalar_one_or_none()
@@ -251,7 +251,7 @@ async def resolve_alarm(alarm_id: str, db: AsyncSession = Depends(get_db_sync)):
 
 
 @router.post("/check")
-async def check_alarms(db: AsyncSession = Depends(get_db_sync)):
+async def check_alarms(db: AsyncSession = Depends(get_db)):
     """手动触发告警检查"""
     checked_count = 0
 
