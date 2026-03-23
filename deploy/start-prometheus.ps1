@@ -1,11 +1,14 @@
 # RoleFit Pro Prometheus Monitor - One-Click Setup
 # No Docker required!
+# Supports Windows paths with Chinese characters
 
 param([switch]$Uninstall)
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$InstallRoot = "$env:LOCALAPPDATA\RoleFitPrometheus"
+# Use C:\Prometheus to avoid Chinese character issues in paths
+$InstallRoot = "C:\Prometheus"
+$InstallRootLocal = "$env:LOCALAPPDATA\RoleFitPrometheus"
 $LogFile = "$InstallRoot\install.log"
 
 function Write-Log {
@@ -43,6 +46,9 @@ if ($Uninstall) {
         Start-Sleep -Seconds 2
         Remove-Item -Path $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
+    if (Test-Path $InstallRootLocal) {
+        Remove-Item -Path $InstallRootLocal -Recurse -Force -ErrorAction SilentlyContinue
+    }
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
@@ -56,11 +62,17 @@ Write-Host "  RoleFit Pro Prometheus Monitor Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Use LOCALAPPDATA for downloads to avoid permission issues
+$DownloadRoot = "$env:LOCALAPPDATA\RoleFitPrometheus"
+if (-not (Test-Path $DownloadRoot)) {
+    New-Item -ItemType Directory -Path $DownloadRoot -Force | Out-Null
+}
 if (-not (Test-Path $InstallRoot)) {
     New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 }
 
 Write-Log "Install directory: $InstallRoot"
+Write-Log "Download cache: $DownloadRoot"
 Write-Log "First run will download all dependencies..."
 
 if ($PSVersionTable.PSVersion.Major -lt 5) {
@@ -72,7 +84,7 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
 Write-Host "" -ForegroundColor Yellow
 Write-Host "[1/4] Installing windows_exporter..." -ForegroundColor Yellow
 
-$winExporterPath = "$InstallRoot\windows_exporter"
+$winExporterPath = "$DownloadRoot\windows_exporter"
 $winExporterExe = "$winExporterPath\windows_exporter.exe"
 $winExporterUrl = "https://github.com/prometheus-community/windows_exporter/releases/download/v0.25.0/windows_exporter-0.25.0-amd64.exe"
 
@@ -131,9 +143,10 @@ if ($winExporterCheck) {
 Write-Host "" -ForegroundColor Yellow
 Write-Host "[2/4] Installing Prometheus..." -ForegroundColor Yellow
 
-$prometheusPath = "$InstallRoot\prometheus"
+$prometheusPath = "$InstallRoot"
 $prometheusExe = "$prometheusPath\prometheus.exe"
-$prometheusConfig = "$ScriptDir\deploy\prometheus\prometheus.yml"
+$prometheusConfigSrc = "$ScriptDir\deploy\prometheus\prometheus.yml"
+$prometheusConfigDst = "$prometheusPath\prometheus.yml"
 $prometheusUrl = "https://github.com/prometheus/prometheus/releases/download/v2.47.0/prometheus-2.47.0.windows-amd64.zip"
 
 if (-not (Test-Path $prometheusPath)) {
@@ -144,7 +157,7 @@ if (-not (Test-Path $prometheusExe)) {
     Write-Log "Downloading Prometheus..."
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $zipPath = "$InstallRoot\prometheus-2.47.0.windows-amd64.zip"
+        $zipPath = "$DownloadRoot\prometheus-2.47.0.windows-amd64.zip"
         Invoke-WebRequest -Uri $prometheusUrl -OutFile $zipPath -TimeoutSec 300 -UseBasicParsing
         
         Write-Log "Extracting Prometheus..."
@@ -152,6 +165,7 @@ if (-not (Test-Path $prometheusExe)) {
         
         Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
         
+        # Move contents from subfolder to root
         $extractedFolder = Get-ChildItem -Path $prometheusPath -Directory | Where-Object { $_.Name -like "prometheus*" } | Select-Object -First 1
         if ($extractedFolder -and $extractedFolder.Name -ne "") {
             Get-ChildItem -Path $extractedFolder.FullName | Move-Item -Destination $prometheusPath -Force -ErrorAction SilentlyContinue
@@ -165,20 +179,17 @@ if (-not (Test-Path $prometheusExe)) {
     }
 } else {
     Write-Log "Prometheus already exists, skipping download"
-    # Clean up any corrupted previous download
-    $corruptedFile = "$InstallRoot\prometheus-2.47.0.windows-amd64.tar.gz"
-    if (Test-Path $corruptedFile) {
-        Remove-Item $corruptedFile -Force -ErrorAction SilentlyContinue
-    }
 }
 
-if ((Test-Path $prometheusConfig) -and (-not (Test-Path "$prometheusPath\prometheus.yml"))) {
-    Copy-Item $prometheusConfig "$prometheusPath\prometheus.yml" -Force
+# Always copy config from deploy folder to ensure it's correct
+if (Test-Path $prometheusConfigSrc) {
+    Copy-Item $prometheusConfigSrc -Destination $prometheusConfigDst -Force
     Write-Log "Copied Prometheus config"
 }
 
 $oldPrometheus = Get-Process -Name "prometheus" -ErrorAction SilentlyContinue
 if ($oldPrometheus) {
+    Write-Log "Stopping old Prometheus..."
     Stop-Process -Name "prometheus" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
 }
@@ -189,13 +200,13 @@ if (-not (Test-Path $prometheusDataPath)) {
 }
 
 Write-Log "Starting Prometheus..."
-$prometheusArgs = "--config.file=`"$prometheusPath\prometheus.yml`" --storage.tsdb.path=`"$prometheusDataPath`" --web.console.libraries=`"$prometheusPath\console_libraries`" --web.console.templates=`"$prometheusPath\consoles`" --web.listen-address=:9090 --storage.tsdb.retention.time=15d"
+$prometheusArgs = "--config.file=`"$prometheusConfigDst`" --storage.tsdb.path=`"$prometheusDataPath`" --web.console.libraries=`"$prometheusPath\console_libraries`" --web.console.templates=`"$prometheusPath\consoles`" --web.listen-address=:9090 --storage.tsdb.retention.time=15d"
 $psi3 = New-Object System.Diagnostics.ProcessStartInfo
 $psi3.FileName = $prometheusExe
 $psi3.Arguments = $prometheusArgs
 $psi3.UseShellExecute = $false
 [System.Diagnostics.Process]::Start($psi3) | Out-Null
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 5
 
 $prometheusCheck = try { Invoke-WebRequest -Uri "http://localhost:9090/-/healthy" -TimeoutSec 5 -UseBasicParsing -ErrorAction SilentlyContinue } catch { $null }
 if ($prometheusCheck.StatusCode -eq 200) {
@@ -222,13 +233,14 @@ if (-not (Test-Path $grafanaBinPath)) {
     Write-Log "Downloading Grafana..."
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $zipPath = "$InstallRoot\grafana-10.1.0.windows-amd64.zip"
+        $zipPath = "$DownloadRoot\grafana-10.1.0.windows-amd64.zip"
         Invoke-WebRequest -Uri $grafanaUrl -OutFile $zipPath -TimeoutSec 300 -UseBasicParsing
         
         Write-Log "Extracting Grafana..."
         Expand-Archive -Path $zipPath -DestinationPath $grafanaPath -Force
         Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
         
+        # Move contents from subfolder to root
         $extractedFolder = Get-ChildItem -Path $grafanaPath -Directory | Where-Object { $_.Name -like "grafana*" } | Select-Object -First 1
         if ($extractedFolder -and $extractedFolder.Name -ne "") {
             Get-ChildItem -Path $extractedFolder.FullName | Move-Item -Destination $grafanaPath -Force -ErrorAction SilentlyContinue
@@ -249,6 +261,7 @@ if (-not (Test-Path $grafanaDataPath)) {
 
 $oldGrafana = Get-Process -Name "grafana-server" -ErrorAction SilentlyContinue
 if ($oldGrafana) {
+    Write-Log "Stopping old Grafana..."
     Stop-Process -Name "grafana-server" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
 }
@@ -267,6 +280,14 @@ Start-Sleep -Seconds 5
 $grafanaCheck = try { Invoke-WebRequest -Uri "http://localhost:3000/api/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction SilentlyContinue } catch { $null }
 if ($grafanaCheck.StatusCode -eq 200) {
     Write-Log "Grafana started (http://localhost:3000)"
+    
+    # Reset admin password to ensure it's admin123
+    Write-Log "Resetting Grafana admin password..."
+    Set-Location $grafanaPath
+    $resetResult = & "$grafanaBinPath" admin reset-admin-password admin123 2>&1 | Out-String
+    if ($resetResult -match "successfully") {
+        Write-Log "Grafana admin password reset successfully"
+    }
 } else {
     Write-Log "Grafana may not have started properly" "WARN"
 }
