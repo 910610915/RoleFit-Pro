@@ -36,6 +36,9 @@ pynvml>=11.5.0
 pywin32>=306
 pythonnet>=3.0.0
 
+# Prometheus (可选 - 用于监控系统集成)
+prometheus>=0.17.0
+
 # Task Queue
 celery>=5.3.0
 

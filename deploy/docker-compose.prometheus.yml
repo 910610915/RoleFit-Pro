@@ -1,0 +1,132 @@
+# Docker Compose 配置 - Prometheus 监控系统
+# 用于 RoleFit-Pro 项目
+#
+# 使用方式:
+#   docker-compose -f docker-compose.prometheus.yml up -d
+#
+# 停止:
+#   docker-compose -f docker-compose.prometheus.yml down
+
+version: '3.8'
+
+services:
+  # ============================================
+  # Prometheus Server
+  # ============================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"      # Prometheus Web UI
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/alert.rules.yml'
+      - '--storage.tsdb.retention.time=15d'      # 保留 15 天数据
+      - '--storage.tsdb.retention.size=10GB'     # 最多存储 10GB
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'                  # 允许热更新配置
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================
+  # Grafana 可视化
+  # ============================================
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"      # Grafana Web UI
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      # 管理员账号配置
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      # 禁用用户注册
+      - GF_USERS_ALLOW_SIGN_UP=false
+      # 允许 Grafana iframe 嵌入
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      # 默认数据源
+      - GF_DATASOURCE_DEFAULT_NAME=Prometheus
+    networks:
+      - monitoring
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # AlertManager 告警管理
+  # ============================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"      # AlertManager Web UI
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # 节点监控 Exporter (可选，每台机器单独部署)
+  # ============================================
+  # 注意：windows_exporter 需要在 Windows 主机上运行
+  # 这里是 Linux 版本的 node_exporter 示例
+  # node_exporter:
+  #   image: prom/node-exporter:v1.6.1
+  #   container_name: node_exporter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9100:9100"
+  #   command:
+  #     - '--path.procfs=/host/proc'
+  #     - '--path.sysfs=/host/sys'
+  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+  #   volumes:
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+  #     - /:/rootfs:ro
+  #   networks:
+  #     - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+    name: rolefit_monitoring
+
+volumes:
+  prometheus_data:
+    name: rolefit_prometheus_data
+  grafana_data:
+    name: rolefit_grafana_data
+  alertmanager_data:
+    name: rolefit_alertmanager_data

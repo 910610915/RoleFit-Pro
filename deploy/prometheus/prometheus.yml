@@ -1,0 +1,79 @@
+# Prometheus Configuration
+# 用于 RoleFit-Pro 监控系统
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'rolefit-pro'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alert.rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ============================================
+  # Windows Exporter - 主机监控
+  # ============================================
+  # 每台 Windows 机器上运行的 windows_exporter
+  # 默认端口: 9182
+  # 指标路径: /metrics
+  - job_name: 'windows_exporter'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      # 添加你的 Windows 机器 IP
+      # 格式: IP:9182
+      - targets: 
+          - 'localhost:9182'
+        labels:
+          group: 'windows'
+          service: 'hardware_monitor'
+    
+    # 使用 metric_relabel_configs 自定义标签
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'windows_'
+        action: keep
+
+  # ============================================
+  # RoleFit Server - 应用监控
+  # ============================================
+  # 监控我们的后端服务
+  - job_name: 'rolefit_server'
+    scrape_interval: 30s
+    static_configs:
+      - targets: 
+          - 'backend:8000'
+        labels:
+          group: 'application'
+          service: 'rolefit_backend'
+
+  # ============================================
+  # Prometheus 自我监控
+  # ============================================
+  - job_name: 'prometheus'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ============================================
+  # 自定义标签说明
+  # ============================================
+  # 所有指标都会自动添加以下标签:
+  # - group: windows/application/prometheus
+  # - service: hardware_monitor/rolefit_backend
+  # 
+  # 使用 hostname 作为 instance 标签 (windows_exporter 自动设置)
+  # 查询示例:
+  #   windows_cpu_percent{instance="DESKTOP-PC"}
+  #   windows_memory_percent{group="windows"}
