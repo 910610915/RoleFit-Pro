@@ -223,7 +223,7 @@ $grafanaPath = "$InstallRoot\grafana"
 $grafanaBinPath = "$grafanaPath\bin\grafana-server.exe"
 $grafanaUrl = "https://dl.grafana.com/oss/release/grafana-10.1.0.windows-amd64.zip"
 $grafanaConfigSrc = "$ScriptDir\deploy\grafana"
-$grafanaDataPath = "$InstallRoot\grafana-data"
+$grafanaDataPath = "$grafanaPath\data"
 
 if (-not (Test-Path $grafanaPath)) {
     New-Item -ItemType Directory -Path $grafanaPath -Force | Out-Null
