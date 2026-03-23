@@ -38,6 +38,7 @@ from app.api import (
     audit_logs as audit_logs_router,
     roles as roles_router,
     third_party_apis as third_party_apis_router,
+    prometheus as prometheus_router,
 )
 from app.api import websocket as websocket_router
 from app.api import scheduler as scheduler_router
@@ -92,6 +93,9 @@ app.include_router(
 )
 app.include_router(websocket_router.router, tags=["WebSocket"])
 app.include_router(scheduler_router.router, prefix="/api", tags=["Scheduler"])
+app.include_router(
+    prometheus_router.router, prefix="/api/prometheus", tags=["Prometheus (Deprecated)"]
+)
 
 
 @app.on_event("startup")

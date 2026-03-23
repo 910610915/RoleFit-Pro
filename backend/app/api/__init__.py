@@ -12,6 +12,7 @@ from app.api.agent import router as agent_router
 from app.api.llm import router as llm_router
 from app.api.llm_config import router as llm_config_router
 from app.api.performance import router as performance_router
+from app.api.prometheus import router as prometheus_router
 
 __all__ = [
     "auth_router",
@@ -27,4 +28,5 @@ __all__ = [
     "llm_router",
     "llm_config_router",
     "performance_router",
+    "prometheus_router",
 ]
