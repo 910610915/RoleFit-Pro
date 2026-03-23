@@ -101,6 +101,11 @@ async def startup_event():
     with sync_engine.begin() as conn:
         Base.metadata.create_all(conn)
 
+    # Initialize basic data (software, scripts, positions)
+    from init_basic_data import init_basic_data
+
+    init_basic_data()
+
     # Start task scheduler
     await init_scheduler()
 
